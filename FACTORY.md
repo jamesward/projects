@@ -183,6 +183,24 @@ The guidance is the "Website Projects" section of zen-of-projects. Static sites 
    Remove any old comment-triggered workflows. The routine now triages PRs.
 4. **GitHub access and routine:** the browser App step and the sync are the same as for sbt projects (`factory-repo-check.sh`, then add the repo to a schedule table and run `factory-routines-sync.py --apply`). The `JDK25` environment works for sites as well; it has full network access.
 
+## Factory sync
+
+[`factory-sync.py`](factory-sync.py) keeps the factory-owned files in every managed repo (the repos in "Managed Repos & Schedules") equal to the factory's current versions, without running any repo's routine:
+- `.factory/MAINTENANCE.md`: the bootstrap from the published zen-of-projects Skill (jamesward/skills `main`), or the no-Skills-dependency variant. ai4jvm and podcast keep their own.
+- `.claude/sbt-mcp-stdio.sh`: [`sbt-mcp-stdio.sh`](sbt-mcp-stdio.sh) here, for sbt repos.
+- The factory-owned entries in `.mcp.json`, `.claude/settings.json` and `.kiro/settings/mcp.json` (the sbt-mcp bridge or `javadocs`). Other servers and settings are kept.
+- No `.github/dependabot.yml`; a `needs-human` label.
+
+`AGENTS.md` and everything else stay with each repo's maintenance routine. Without arguments the script only reports; `--apply` opens or updates one `Factory sync:` PR per drifted repo, from the branch `claude/factory-sync`, and squash-merges it once its CI has run and passed. Failing or missing CI gets `needs-human` and a comment; checks still running are left for the next run. Pass `owner/repo` arguments to limit it.
+
+The routine `factory sync` (`trig_01NUJivtCGbUbQCyZjZAju5w`, daily 05:07 America/Denver, before the maintenance routines) runs it. It isn't in the schedule tables, so `factory-routines-sync.py` lists it as unmanaged. In that routine:
+
+1. Run `./factory-sync.py --list`. For each repo, call the `add_repo` tool (load it with ToolSearch) with `access: "push"`, one call at a time, and don't clone them; the script clones what it needs.
+2. Run `python3 -u ./factory-sync.py --apply` with a 30-minute command timeout.
+3. Reply with the script's summary line and every line starting with `~`, `!!` or `   ` (PR numbers and merge results). If a repo failed (`!!`) or a PR got `needs-human`, say why. Change nothing else: don't edit files in this repo or in the managed repos by hand, and don't run any repo's maintenance routine.
+
+Run it locally the same way after editing the factory (`./factory-sync.py`, then `--apply`). Verified 2026-10-05: a cloud session `add_repo`'d all 44 repos without prompts and the report took 88s; locally `--apply` opened, CI-checked and merged toolbook PR #99. In cloud sessions the script reads the Skill from a clone of jamesward/skills, because the git proxy refuses start.jamesward.com's redirect to the raw file (HTTP 403).
+
 ## Managed Repos & Schedules
 
 Every managed repo has one routine, `<repo name> maintenance`, that runs `.factory/MAINTENANCE.md` on the `JDK25` environment. These tables are the source of truth for which repos are managed and how often their routine runs. **Weekly is the default.** Move a repo to the daily table when it needs closer attention, for example a production service or a repo under active test.

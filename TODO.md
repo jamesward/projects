@@ -41,6 +41,8 @@ Done (2026-10-04): zen-of-projects Maintenance Routine step 7 has each run revie
 
 ## Open work
 
+- **Factory sync** (done 2026-10-05): `factory-sync.py` plus the daily `factory sync` routine keep factory-owned files current in all managed repos without running their routines (see FACTORY.md). Watch the first few daily runs; the cloud `--apply` path (PR, CI wait, merge through `gh api`) is only verified locally.
+
 - **sbt-mcp: test failure details in `sbt-task` responses.** Done in sbt-mcp 0.1.4/0.1.5; verified through MCP in webjars (`sbt-mcp test FAILED: webjars.GzipSpec / ... 8 was not equal to 9`). Skill guidance committed (unreleased); webjars on 0.1.5. Other repos pick up 0.1.5 on their next routine run.
 - **sbt-mcp: `set` and `reload` restart the MCP server** and drop the in-flight request. Documented in the Skill; a fix would keep the server across session reloads.
 - **sbt-mcp: "no sbt channel available yet"** at session start. Have `sbt-task` wait briefly for a channel instead of failing.
