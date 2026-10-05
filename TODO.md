@@ -15,7 +15,7 @@ Goal: every routine run is evaluated afterwards, and what it reveals improves th
 ### Ideas for how
 
 1. **Run reports as data.** Make the end-of-run report in the Skill's "Maintenance Routine" structured, as a fixed section in the PR description or a comment: tools used, fallbacks with reasons, errors quoted, durations, and an "improvement suggestions" list. The agent already writes most of this; a fixed shape makes it parseable.
-2. **Agent self-critique step.** Add a final routine step: "List what slowed you down or made you fall back, and which file (repo `AGENTS.md`, zen-of-projects, FACTORY.md, a tool) should change so the next run avoids it." Cheap, and it gets the perspective of the agent that hit the problem (the webjars transcript is exactly this).
+2. **Agent self-critique step.** (Started: zen-of-projects step 7.) Add a final routine step: "List what slowed you down or made you fall back, and which file (repo `AGENTS.md`, zen-of-projects, FACTORY.md, a tool) should change so the next run avoids it." Cheap, and it gets the perspective of the agent that hit the problem (the webjars transcript is exactly this).
 3. **Evaluator routine.** A separate scheduled routine (weekly, after the maintenance runs), on the factory repo (`jamesward/projects`) plus the tool repos. It:
    - lists the week's runs (`RemoteTrigger list_runs` for each id in the FACTORY.md tables) and reads their logs (`get_run_log`) and the resulting PRs and comments;
    - clusters findings across repos and dedupes them against the open issues;
@@ -27,15 +27,10 @@ Goal: every routine run is evaluated afterwards, and what it reveals improves th
 
 ### Access to the factory and Skills repos
 
-Every routine should be able to read, and propose changes to, `jamesward/projects` (this factory) and `jamesward/skills` (zen-of-projects and friends). Findings from a diagnostic routine run (2026-10-04, `trig_01Rq62FE9XKNfZjbJxq2LWrR`):
+Done (2026-10-04): zen-of-projects Maintenance Routine step 7 has each run review itself and open `Factory improvement:` PRs (label `factory-improvement`, never merged) in `jamesward/skills` or `jamesward/projects`, attaching them with `add_repo` (`access: "push"`). Verified in a routine run: no prompts or denials, clones, push dry-run and `gh api` all work. Extra routine sources were rejected because they stop `.mcp.json` from loading. Applies once the Skill is released (after 0.0.10) and each repo's routine picks it up.
 
-- **Extra routine sources break sbt-mcp.** With zio-mavencentral plus both repos as sources, all three were cloned, but the repo's `.mcp.json` wasn't loaded (`sbt-mcp-zio-mavencentral` tools missing). The docs agree: a committed `.mcp.json` is only used by single-repo routines. So keep one source per routine.
-- **Single-repo sessions are scoped to that repo.** `gh api repos/jamesward/skills` failed with `GitHub access to this repository is not enabled for this session. Use add_repo to request access.` A `git clone` of the other repos was blocked by the auto-mode classifier ("Exfil Scouting").
-- **Plan:** keep single-repo routines, and add a `MAINTENANCE.md` step that calls `add_repo` for `jamesward/projects` and `jamesward/skills`, then clones them under `/tmp`. Untested: whether `add_repo` works unattended in a routine, or needs approval.
-- **Prerequisites (human):**
-  - `jamesward/projects` exists on GitHub but is empty: this directory was never pushed. It's public, so check FACTORY.md first (it has routine, installation and Heroku app ids, no secrets found).
-  - Add `jamesward/projects` and `jamesward/skills` to the Claude GitHub App (personal installation). The run got `remote: Claude doesn't have GitHub access to jamesward/skills` (403).
-- **Later:** what to do about other maintained dependencies (sbt-mcp, skillsjars plugins, cfn-pkl-extras, ...) and whether routines get access to those too.
+- **Later:** other maintained dependencies (sbt-mcp, SkillsJars plugins, cfn-pkl-extras, ...). Step 7 currently only suggests fixes for them in the PR description.
+- **Watch for:** duplicate or noisy PRs across 44 weekly runs. If it happens, move to the evaluator routine (idea 3) or issues instead of PRs.
 
 ### Open questions
 
