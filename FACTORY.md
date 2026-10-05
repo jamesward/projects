@@ -29,6 +29,7 @@ Run [`factory-github-settings.py`](factory-github-settings.py), and add `--apply
 - you're watching the repo with **All activity** (GitHub defaults to "Participating and @mentions");
 - **Wikis** are off. A wiki that has pages is reported and left on unless you pass `--force-wiki`;
 - **Projects** are off.
+- **Dependabot alerts** are on and **Dependabot security update PRs** are off. The maintenance routine fixes open alerts in its rolling PR (zen-of-projects step 3), within each project's exceptions. Security update PRs ignored those exceptions: on webjars-locator-core they proposed Spring Boot 3 (Java 17) for a Java 8 library.
 
 Archived repos are skipped. Settings on repos you don't administer are only reported.
 

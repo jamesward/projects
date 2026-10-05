@@ -11,6 +11,9 @@ Settings:
   - You (the gh user) watch the repo with "All activity" (GitHub's default is "Participating").
   - Wiki is off. If the wiki has pages, it's reported and left on unless --force-wiki is given.
   - Projects are off.
+  - Dependabot alerts (vulnerability alerts) are on, and Dependabot security update PRs are off: the
+    maintenance routine handles open alerts in its rolling PR (zen-of-projects), within each
+    project's documented exceptions (for example a Java 8 target).
 Archived repos and repos you don't administer are reported and skipped.
 """
 import json
@@ -82,6 +85,14 @@ def main():
         if info.get("has_projects"):
             todo.append(("projects", "turn projects off"))
 
+        if admin:
+            alerts = gh(f"repos/{repo}/vulnerability-alerts", check=False).returncode == 0  # 204 on, 404 off
+            if not alerts:
+                todo.append(("alerts", "turn Dependabot alerts on"))
+            fixes = (info.get("security_and_analysis") or {}).get("dependabot_security_updates", {}).get("status")
+            if fixes == "enabled":
+                todo.append(("fixes", "turn Dependabot security update PRs off"))
+
         if not todo:
             print(f"=  {repo}: ok"); continue
         if not admin and any(k != "watch" for k, _ in todo):
@@ -100,6 +111,10 @@ def main():
                     gh("-X", "PATCH", f"repos/{repo}", "-F", "has_wiki=false", "--silent")
                 elif kind == "projects":
                     gh("-X", "PATCH", f"repos/{repo}", "-F", "has_projects=false", "--silent")
+                elif kind == "alerts":
+                    gh("-X", "PUT", f"repos/{repo}/vulnerability-alerts", "--silent")
+                elif kind == "fixes":
+                    gh("-X", "DELETE", f"repos/{repo}/automated-security-fixes", "--silent")
     verb = "made" if APPLY else "needed (run with --apply)"
     print(f"\n{changes} change(s) {verb}; {problems} item(s) need attention.")
 
