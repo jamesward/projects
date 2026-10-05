@@ -9,7 +9,8 @@
 Managed repos are the ones in FACTORY.md's schedule tables. For each, the default branch is
 compared with the canonical factory files:
 
-  .factory/MAINTENANCE.md    the bootstrap in the released zen-of-projects Skill (start.jamesward.com);
+  .factory/MAINTENANCE.md    the bootstrap in the published zen-of-projects Skill (jamesward/skills main,
+                             which start.jamesward.com serves);
                              a no-Skills-dependency variant for NO_SKILLS_DEP; CUSTOM_MAINTENANCE skipped
   .claude/sbt-mcp-stdio.sh   ./sbt-mcp-stdio.sh (sbt repos)
   .mcp.json                  the factory-owned server entry (sbt-mcp bridge, or javadocs); others kept
@@ -89,9 +90,24 @@ def managed_repos():
     return sorted(set(re.findall(r"^\| `([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)` \|", md[start:end], re.M)))
 
 
-def bootstrap():
+SKILLS_REPO = "https://github.com/jamesward/skills"
+SKILL_PATH = "skills/zen-of-projects/SKILL.md"
+
+
+def skill_text():
+    """The published zen-of-projects Skill. start.jamesward.com redirects to the raw file on
+    jamesward/skills main; cloud sessions' git proxy refuses that raw fetch (HTTP 403) but serves
+    git clones, so read it from a shallow clone and fall back to HTTP."""
+    with tempfile.TemporaryDirectory() as t:
+        r = run("git", "clone", "-q", "--depth", "1", SKILLS_REPO, t, check=False)
+        if r.returncode == 0 and (Path(t) / SKILL_PATH).exists():
+            return (Path(t) / SKILL_PATH).read_text()
     req = urllib.request.Request(SKILL_URL, headers={"User-Agent": "factory-sync"})
-    skill = urllib.request.urlopen(req, timeout=60).read().decode()
+    return urllib.request.urlopen(req, timeout=60).read().decode()
+
+
+def bootstrap():
+    skill = skill_text()
     m = re.search(r"^````markdown\n(.*?)^````$", skill, re.S | re.M)
     if not m:
         sys.exit(f"no ````markdown bootstrap block in {SKILL_URL}")
