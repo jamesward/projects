@@ -209,7 +209,7 @@ Every managed repo has one routine, `<repo name> maintenance`, that runs `.facto
 After editing the tables, run [`factory-routines-sync.py`](factory-routines-sync.py). It reads both tables, fetches each routine by the id in the Routine column (the routines API `list` returns only the first 20 and ignores its cursor), and reports drift:
 - a missing routine (one is created only once the repo's factory files are on its default branch)
 - the wrong schedule, which also covers moving a repo between weekly and daily
-- the wrong name, prompt or environment
+- the wrong name, prompt, environment or notifications (email only)
 - attached connectors, or a disabled routine
 - routines for repos that aren't listed, which it leaves alone
 

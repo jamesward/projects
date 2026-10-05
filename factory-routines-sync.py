@@ -28,6 +28,7 @@ TZ = ZoneInfo("America/Denver")
 ENVIRONMENT_ID = "env_0159utCSbffzUfWZZbAesmJ5"  # JDK25
 PROMPT = ("Follow .factory/MAINTENANCE.md in this repository. "
           "If it doesn't exist yet, follow .factory/DAILY.md instead.")
+NOTIFICATIONS = {"email": True, "push": False, "slack": False}  # email only
 DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 CRON_DOW = {"Sun": 0, "Mon": 1, "Tue": 2, "Wed": 3, "Thu": 4, "Fri": 5, "Sat": 6}
 
@@ -156,7 +157,7 @@ def summarize(r):
     prompt = events[0].get("data", {}).get("message", {}).get("content", "")
     return {"id": r["id"], "name": r["name"], "cron": r.get("cron_expression") or "", "enabled": r["enabled"],
             "env": ccr.get("environment_id"), "repos": repos, "connectors": len(r.get("mcp_connections") or []),
-            "prompt": prompt}
+            "prompt": prompt, "notifications": (r.get("notifications") or {}).get("channel")}
 
 
 def ready(repo):
@@ -202,6 +203,7 @@ def main():
         if h["prompt"] != PROMPT: diffs.append("prompt -> the MAINTENANCE.md prompt")
         if h["connectors"]: diffs.append(f"remove {h['connectors']} connector(s)")
         if not h["enabled"]: diffs.append("enable")
+        if h["notifications"] != NOTIFICATIONS: diffs.append("notifications -> email only")
         if diffs:
             print(f"~  {repo} ({h['id']}): " + "; ".join(diffs))
             actions.append(("update", repo, h, target, when))
@@ -223,7 +225,9 @@ def main():
         common = (f"- Name: {t['name']}\n- Repository: {repo} (only this one)\n- Prompt: {t['prompt']}\n"
                   f"- Schedule: cron {t['cron']} in UTC ({when})\n"
                   f"- Environment: environment_id {t['env']} (JDK25)\n"
-                  "- Enabled: true\n- Connectors / MCP connections: none (remove any attached, and verify mcp_connections is empty)\n")
+                  "- Enabled: true\n- Connectors / MCP connections: none (remove any attached, and verify mcp_connections is empty)\n"
+                  "- Notifications: email only, i.e. body field notifications = "
+                  '{"channel": {"email": true, "push": false, "slack": false}}\n')
         if kind == "create":
             p = ("/schedule Create a new scheduled routine with exactly these settings and do not ask follow-up "
                  f"questions. Do not run it.\n{common}Afterwards, fetch it and report its id, name, cron and environment_id.")
