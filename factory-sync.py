@@ -18,6 +18,7 @@ compared with the canonical factory files:
                              NO_SKILLS_DEP); other settings kept
   .kiro/settings/mcp.json    the factory-owned server entry; others kept
   .github/dependabot.yml     must not exist
+  line endings               files stored as their .gitattributes say (no diff in a fresh clone)
   label needs-human          must exist
 
 AGENTS.md and everything else are left to each repo's maintenance routine. --apply commits to the
@@ -50,8 +51,13 @@ NO_SKILLS_DEP = {"skillsjars/skillsjars-gradle-plugin", "skillsjars/skillsjars-m
                  "skillsjars/skillsjars-example-spring-ai"}
 
 JAVADOCS = {"type": "http", "url": "https://www.javadocs.dev/mcp"}
-FETCH_CMD = ("mkdir -p /tmp/zen-of-projects && curl -fsSL --retry 5 --retry-delay 10 --retry-all-errors "
-             "https://start.jamesward.com -o /tmp/zen-of-projects/SKILL.md")
+# Cloud sessions' proxy refuses start.jamesward.com's redirect to the raw file (HTTP 403), but serves
+# git clones of public repos, so routines read the Skill from a clone of jamesward/skills (same content).
+FETCH_CMD = ("git clone -q --depth 1 https://github.com/jamesward/skills /tmp/jamesward-skills "
+             "|| git -C /tmp/jamesward-skills pull -q")
+OLD_FETCH_CMDS = ["mkdir -p /tmp/zen-of-projects && curl -fsSL --retry 5 --retry-delay 10 --retry-all-errors "
+                  "https://start.jamesward.com -o /tmp/zen-of-projects/SKILL.md"]
+SKILL_FILE = "/tmp/jamesward-skills/skills/zen-of-projects/SKILL.md"
 LABEL = {"name": "needs-human", "color": "B60205",
          "description": "The maintenance routine needs a maintainer decision"}
 
@@ -119,15 +125,15 @@ def no_skills_bootstrap(boot):
     a = boot.index("1. Update the Skills dependency")
     b = boot.index("and don't delete it.", boot.index("3. Read `.kiro/skills"))
     b = boot.index("\n", b)
-    return boot[:a] + f"""1. Fetch the zen-of-projects Skill. This repo has no `com.jamesward:skills` dependency (see
-   `AGENTS.md`), so read the published Skill directly:
+    return boot[:a] + f"""1. Get the zen-of-projects Skill. This repo has no `com.jamesward:skills` dependency (see
+   `AGENTS.md`), so read the published Skill from its repository:
 
    ```bash
    {FETCH_CMD}
    ```
 
    If it fails, quote the exact error and stop.
-2. Read `/tmp/zen-of-projects/SKILL.md` and follow its "Maintenance Routine" section, using
+2. Read `{SKILL_FILE}` and follow its "Maintenance Routine" section, using
    `AGENTS.md` for this project's commands and documented exceptions. Skip any step about the
    Skills dependency or extracting Skills. While an unreleased version of the Skill is being
    tested, `.factory/skills/zen-of-projects/SKILL.md` exists. Read that file instead, and don't
@@ -174,6 +180,14 @@ def desired(repo, d, boot):
     def write_json(rel, obj, why):
         if obj is not None:
             write(rel, json.dumps(obj, indent=2) + "\n", why)
+
+    # Files committed against their .gitattributes line-ending rules (e.g. gradlew.bat with
+    # `*.bat text eol=crlf`) show as modified in every fresh clone, which trips the cloud
+    # sessions' "uncommitted changes" Stop hook. Store them normalized.
+    run("git", "add", "--renormalize", ".", cwd=d)
+    renorm = run("git", "diff", "--cached", "--name-only", cwd=d).stdout.split()
+    if renorm:
+        changes.append(f"renormalize line endings per .gitattributes: {', '.join(renorm)}")
 
     for f in (".github/dependabot.yml", ".github/dependabot.yaml"):
         if (d / f).exists():
@@ -224,10 +238,11 @@ def desired(repo, d, boot):
             en.append(server)
         if repo in NO_SKILLS_DEP:
             allow = st.setdefault("permissions", {}).setdefault("allow", [])
+            allow[:] = [a for a in allow if a not in [f"Bash({c})" for c in OLD_FETCH_CMDS]]
             if f"Bash({FETCH_CMD})" not in allow:
                 allow.append(f"Bash({FETCH_CMD})")
         if json.dumps(st, sort_keys=True) != before:
-            write_json(".claude/settings.json", st, f".claude/settings.json: approve {server}")
+            write_json(".claude/settings.json", st, f".claude/settings.json: approve {server}" + (" and the Skill fetch" if repo in NO_SKILLS_DEP else ""))
     return kind, changes
 
 
