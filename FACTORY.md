@@ -69,6 +69,8 @@ One reusable environment for all managed repos (claude.ai/code → environment s
   - Applies the resolver setup from zen-of-projects "Resolvers". The sbt launcher and builds then download from the Google mirror and fall back to Maven Central.
   - Pre-downloads sbt into the environment cache.
 
+  Re-paste it after every change here (last: Gradle and Maven mirrors, 2026-10-07).
+
   Every command in it is on a single line, with no indentation or backslash continuations. A pasted continuation once merged lines and corrupted `~/.sbt/repositories` (`duplicate label 'local'`). The script fails if that file doesn't come out as exactly 4 lines. Edit the file, not the environment, then re-paste it.
 
   The script must exit 0 and finish in about 5 minutes to be cached; this block took about 25 seconds locally. Its output is cached for about 7 days, and the cache is rebuilt when the script or the allowed hosts change. To check a session, look for the `--- /root/.sbt/repositories:` listing and the `ls` of `~/.sbt/boot` in the setup output, or run `cat ~/.sbt/repositories ~/.config/sbt/sbtopts`. A launcher error that lists `repo.scala-sbt.org` and `repo.typesafe.com` means the file isn't in effect.
@@ -149,7 +151,7 @@ Runs count against your subscription usage. Scheduled runs are limited to 100 pe
 
 These use the same routine, environment and `MAINTENANCE.md` as sbt projects. The conventions are in zen-of-projects ("Maven and Gradle Projects"). There is no sbt-mcp, so each repo registers the javadocs.dev MCP server directly.
 
-1. **One-time:** GitHub access and the `JDK25` environment, as in sbt steps 1–2. The Google-mirror setup in `jdk25-setup.sh` only covers sbt. Maven and Gradle still download from Maven Central and can hit its rate limit (HTTP 429) in the cloud. Mirror support for them is still to do.
+1. **One-time:** GitHub access and the `JDK25` environment, as in sbt steps 1–2. `jdk25-setup.sh` also prefers the Google mirror for Gradle (an init script in `~/.gradle/init.d/` that puts it first in the build's own repositories) and Maven (an active profile in `~/.m2/settings.xml`), with Maven Central as the fallback. Before that, spring-ai-mcp-demo and mcp-apps-demo routines failed on `Received status code 429 from server: Too Many Requests` from Maven Central (2026-10-06). Verified locally with fresh caches: every download came from the mirror, for settings-level, project-level and Maven repositories.
 2. **Seed the repo,** using the snippets in the Skill. The first routine run aligns the rest.
    - Add the SkillsJars plugin with the `com.jamesward:skills` dependency (Maven: `com.skillsjars:maven-plugin` with `<dir>.kiro/skills</dir>`; Gradle: `com.skillsjars.gradle-plugin` with `skill(...)`), and add `.kiro/skills/` to `.gitignore`.
    - Add a `javadocs` HTTP server (`https://www.javadocs.dev/mcp`) to `.mcp.json` and `.kiro/settings/mcp.json`, and approve it in `.claude/settings.json` (`enabledMcpjsonServers`).
@@ -164,7 +166,7 @@ Verified end to end after the browser App step. In each case the run pushed, ope
 
 **Testing an unreleased Skill:** copy `~/projects/jamesward-skills/skills/zen-of-projects/SKILL.md` to `.factory/skills/zen-of-projects/SKILL.md` in the repo under test. `MAINTENANCE.md` step 3 reads that copy instead of the extracted one. Delete it once the Skill is released and the repo's `com.jamesward:skills` pin includes the change.
 
-**Repos without the Skills dependency:** the SkillsJars plugins themselves and their examples (`skillsjars-gradle-plugin`, `skillsjars-maven-plugin`, `skillsjars-example-spring-ai`) don't depend on `com.jamesward:skills`: in a plugin's own build or a published example it would muddy what the project demonstrates. Their `.factory/MAINTENANCE.md` replaces bootstrap steps 1–3 with a `curl` of https://start.jamesward.com into `/tmp/zen-of-projects/SKILL.md` (pre-approved in `.claude/settings.json`), and `AGENTS.md` records the exception.
+**Repos without the Skills dependency:** the SkillsJars plugins themselves and their examples (`skillsjars-gradle-plugin`, `skillsjars-maven-plugin`, `skillsjars-example-spring-ai`) don't depend on `com.jamesward:skills`: in a plugin's own build or a published example it would muddy what the project demonstrates. Their `.factory/MAINTENANCE.md` replaces bootstrap steps 1–3 with a shallow clone of jamesward/skills into `/tmp/jamesward-skills` (pre-approved in `.claude/settings.json`), and `AGENTS.md` records the exception. A `curl` of https://start.jamesward.com got HTTP 403 from the cloud proxy (its redirect to the raw file is refused), so all three routines stopped at step 1 (2026-10-06/07).
 
 ## Factory Setup: Websites (draft)
 
