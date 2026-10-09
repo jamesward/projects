@@ -202,6 +202,8 @@ The routine `factory sync` (`trig_01NUJivtCGbUbQCyZjZAju5w`, daily 05:07 America
 2. Run `python3 -u ./factory-sync.py --apply` with a 30-minute command timeout.
 3. Reply with the script's summary line and every line starting with `~`, `!!` or `   ` (PR numbers and merge results). If a repo failed (`!!`) or a PR got `needs-human`, say why. Change nothing else: don't edit files in this repo or in the managed repos by hand, and don't run any repo's maintenance routine.
 
+The three commands and `add_repo` are pre-approved in this repo's `.claude/settings.json`, so the auto mode classifier doesn't have to judge a script that pushes to and merges PRs in 44 repos (a run on 2026-10-09 reported "Factory sync could not run: the permission classifier denied"). Run the commands exactly as written: a changed command line isn't covered by the approval.
+
 Run it locally the same way after editing the factory (`./factory-sync.py`, then `--apply`). Verified 2026-10-05: a cloud session `add_repo`'d all 44 repos without prompts and the report took 88s; locally `--apply` opened, CI-checked and merged toolbook PR #99. In cloud sessions the script reads the Skill from a clone of jamesward/skills, because the git proxy refuses start.jamesward.com's redirect to the raw file (HTTP 403).
 
 ## Managed Repos & Schedules
