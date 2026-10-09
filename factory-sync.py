@@ -13,6 +13,7 @@ compared with the canonical factory files:
                              which start.jamesward.com serves);
                              a no-Skills-dependency variant for NO_SKILLS_DEP; CUSTOM_MAINTENANCE skipped
   .claude/sbt-mcp-stdio.sh   ./sbt-mcp-stdio.sh (sbt repos)
+  build.sbt                  sbt-mcp settings as `ThisBuild / mcp*`, not `Global /`
   .mcp.json                  the factory-owned server entry (sbt-mcp bridge, or javadocs); others kept
   .claude/settings.json      that server in enabledMcpjsonServers (+ the Skill fetch permission for
                              NO_SKILLS_DEP); other settings kept
@@ -209,6 +210,13 @@ def desired(repo, d, boot):
         names = [k for k in list(mcp.get("mcpServers", {})) + list(kiro.get("mcpServers", {})) if k.startswith("sbt-mcp")]
         name = names[0] if names else f"sbt-mcp-{repo.split('/')[1]}"
         port = re.search(r"mcpPort\s*:=\s*(\d+)", (d / "build.sbt").read_text())
+        # sbt-mcp settings use `ThisBuild /`: a source dependency's `Global / mcpPort` replaces
+        # a root build's `Global /` one (sbt-mcp source-dependency scripted test).
+        b = (d / "build.sbt").read_text()
+        b2 = re.sub(r"^Global(\s*)/(\s*)(mcpEnabled|mcpHost|mcpPort|mcpDisableInCI|mcpDocsUrl)\b", r"ThisBuild\1/\2\3", b, flags=re.M)
+        if b2 != b:
+            (d / "build.sbt").write_text(b2)
+            changes.append("build.sbt: sbt-mcp settings use ThisBuild / instead of Global /")
         write(".claude/sbt-mcp-stdio.sh", BRIDGE.read_text(), ".claude/sbt-mcp-stdio.sh: current sbt-mcp stdio bridge")
         os.chmod(d / ".claude/sbt-mcp-stdio.sh", 0o755)
         bridge = {"type": "stdio", "command": "bash", "args": [".claude/sbt-mcp-stdio.sh"], "timeout": 1800000}
