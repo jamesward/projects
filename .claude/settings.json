@@ -2,8 +2,11 @@
   "permissions": {
     "allow": [
       "Bash(./factory-sync.py --list)",
+      "Bash(./factory-sync.py --list:*)",
       "Bash(python3 -u ./factory-sync.py)",
+      "Bash(python3 -u ./factory-sync.py:*)",
       "Bash(python3 -u ./factory-sync.py --apply)",
+      "Bash(python3 -u ./factory-sync.py --apply:*)",
       "mcp__claude-code-remote__add_repo"
     ]
   }
