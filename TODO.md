@@ -41,6 +41,10 @@ Done (2026-10-04): zen-of-projects Maintenance Routine step 8 has each run revie
 
 ## Open work
 
+- **sbt-mcp: false `[ok]` after a reload.** In sbt-webjars' 2026-10-13 run, `sbt-task "+compile; scripted"` right after `reload` returned `[ok] ... elapsed: 77 ms, captured output: empty` without running anything. Reproduce in a scripted test (reload, then a long command) and fix, or make the response say the command didn't run.
+- **Dependabot alerts in cloud runs:** `gh api .../dependabot/alerts` gets `403 Resource not accessible by integration`, so routines can't do step 4 there. Options: a local scheduled check, or ask whether the GitHub proxy can grant `security_events` read.
+- **Push notifications** are still sent by some failing runs despite the bootstrap saying not to.
+
 - **Factory sync** (done 2026-10-05): `factory-sync.py` plus the daily `factory sync` routine keep factory-owned files current in all managed repos without running their routines (see FACTORY.md). Watch the first few daily runs; the cloud `--apply` path (PR, CI wait, merge through `gh api`) is only verified locally.
 
 - **sbt-mcp: test failure details in `sbt-task` responses.** Done in sbt-mcp 0.1.4/0.1.5; verified through MCP in webjars (`sbt-mcp test FAILED: webjars.GzipSpec / ... 8 was not equal to 9`). Skill guidance committed (unreleased); webjars on 0.1.5. Other repos pick up 0.1.5 on their next routine run.
