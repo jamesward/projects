@@ -83,7 +83,10 @@ One reusable environment for all managed repos (claude.ai/code → environment s
   BASH_MAX_TIMEOUT_MS=1800000
   MCP_TIMEOUT=600000
   CLAUDE_CODE_MCP_STARTUP_WAIT_MS=600000
+  JDK_JAVA_OPTIONS=-Dsbt.repository.config=/root/.sbt/repositories -Dsbt.override.build.repos=true
   ```
+
+  `JDK_JAVA_OPTIONS` applies the mirror setup to every `java` process, including the nested sbt that `scripted` launches for sbt plugin tests. That child runs `java -Dsbt.global.base=<temp> -jar sbt-launch.jar` directly, so it doesn't read `~/.config/sbt/sbtopts` (only the `./sbt` script does), and its launcher looks for `repositories` under the temporary global base instead of `~/.sbt`. Without the variable, sbt-webjars' scripted tests resolved from repo1.maven.org and got HTTP 429 (2026-10-13). Verified locally with a logging mirror: with the variable, the scripted child resolved only through the mirror and passed. Every `java` launch prints `NOTE: Picked up JDK_JAVA_OPTIONS: ...` to stderr; that's expected.
 
   `JAVA_HOME` pins sessions to the Java 25 the script installs. `SBT_LAUNCH_REPO` makes the `./sbt` script download `sbt-launch.jar` from the mirror. The timeouts give long sbt test runs room; the defaults are 2 minutes per command and 10 minutes at most. Don't put secrets here, because anyone using the environment can read them. Paid and integration test keys stay unset, so those tests are skipped.
 
