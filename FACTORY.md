@@ -171,6 +171,19 @@ Verified end to end after the browser App step. In each case the run pushed, ope
 
 **Repos without the Skills dependency:** the SkillsJars plugins themselves and their examples (`skillsjars-gradle-plugin`, `skillsjars-maven-plugin`, `skillsjars-example-spring-ai`) don't depend on `com.jamesward:skills`: in a plugin's own build or a published example it would muddy what the project demonstrates. Their `.factory/MAINTENANCE.md` replaces bootstrap steps 1–3 with a shallow clone of jamesward/skills into `/tmp/jamesward-skills` (pre-approved in `.claude/settings.json`), and `AGENTS.md` records the exception. A `curl` of https://start.jamesward.com got HTTP 403 from the cloud proxy (its redirect to the raw file is refused), so all three routines stopped at step 1 (2026-10-06/07).
 
+## Factory Setup: Node.js Projects
+
+The conventions are zen-of-projects "Node.js Projects". Set up this way: `jamesward/semver-as-a-service`.
+
+1. **Seed the repo** on a branch, then merge after CI:
+   - `engines.node` = the active LTS line (`24.x`), exact versions for every dependency (`npm view <pkg> version`), `npm install` to refresh the lockfile, `npm audit --omit=dev` clean;
+   - CI on push to the default branch and PRs: `actions/setup-node` with `node-version-file: package.json`, `npm ci`, `npm test`, and a server smoke test;
+   - `AGENTS.md`: commands, production app and URL, exceptions;
+   - no `.github/dependabot.yml`.
+2. **Factory files:** `factory-sync.py` treats a repo with `package.json` and no JVM build as `node`: it writes the no-Skills-dependency `MAINTENANCE.md` (npm has no SkillsJars) and approves the Skill clone in `.claude/settings.json`; no MCP files.
+3. **Production:** a merge to the default branch deploys when the Heroku app has GitHub auto-deploy. Check `heroku releases --app <app>` and the URL after the first merge.
+4. **GitHub access and routine:** the same as for sbt projects.
+
 ## Factory Setup: Websites (draft)
 
 The guidance is the "Website Projects" section of zen-of-projects. Static sites have no build, so their routine loads the Skill from https://start.jamesward.com instead of SkillsJars. They don't use MCP servers. Sites set up this way: `jamesward/ai4jvm` (daily) and `MindviewLLC/podcast` (happypathprogramming.com, weekly; its regeneration rules live in its `AGENTS.md` and `.scripts/`).
@@ -275,6 +288,7 @@ It only reports by default. `--apply` creates or updates routines to match the t
 | `webjars/webjars-locator-core` | Mon | 07:27 | `trig_015oFBdU7npQ6HpdkLPRRQch` |
 | `jamesward/cfn-pkl-extras` | Tue | 07:27 | `trig_01EtjTMoEEM3A7mDVT2svqgx` |
 | `jamesward/pklgha` | Wed | 07:27 | `trig_01RPBKeF8x8DcuCuVKYH1kqL` |
+| `jamesward/semver-as-a-service` | Thu | 07:27 | `trig_013cxpJ2DQDz4aiwdrkTYKJf` |
 
 ## Registries & Production Identifiers
 
@@ -597,7 +611,8 @@ https://github.com/webjars/sbt-webjars
 Uses the Node SemVer Library to resolve version range things for WebJars
 
 Source: https://github.com/jamesward/semver-as-a-service
-Heroku App: semver-as-a-service
+Heroku App: semver-as-a-service (Node.js, no add-ons; GitHub auto-deploys `main`)
+URL: https://semver.webjars.org
 
 
 ### zio-bedrock

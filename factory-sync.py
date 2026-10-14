@@ -9,7 +9,8 @@
 Managed repos are the ones in FACTORY.md's schedule tables. For each, the default branch is
 compared with the canonical factory files:
 
-  .factory/MAINTENANCE.md    the bootstrap in the published zen-of-projects Skill (jamesward/skills main,
+  .factory/MAINTENANCE.md    (Node repos get the no-Skills-dependency variant and no MCP files)
+                             the bootstrap in the published zen-of-projects Skill (jamesward/skills main,
                              which start.jamesward.com serves);
                              a no-Skills-dependency variant for NO_SKILLS_DEP; CUSTOM_MAINTENANCE skipped
   .claude/sbt-mcp-stdio.sh   ./sbt-mcp-stdio.sh (sbt repos)
@@ -169,7 +170,8 @@ def desired(repo, d, boot):
     d = Path(d)
     changes = []
     kind = "sbt" if (d / "build.sbt").exists() else (
-        "jvm" if any((d / f).exists() for f in ("pom.xml", "build.gradle.kts", "build.gradle")) else "site")
+        "jvm" if any((d / f).exists() for f in ("pom.xml", "build.gradle.kts", "build.gradle")) else (
+        "node" if (d / "package.json").exists() else "site"))
 
     def write(rel, text, why):
         p = d / rel
@@ -198,11 +200,24 @@ def desired(repo, d, boot):
     if repo in CUSTOM_MAINTENANCE or kind == "site":
         return kind, changes
 
-    text = no_skills_bootstrap(boot) if repo in NO_SKILLS_DEP else boot
+    no_skills = repo in NO_SKILLS_DEP or kind == "node"  # npm has no SkillsJars
+    text = no_skills_bootstrap(boot) if no_skills else boot
     write(".factory/MAINTENANCE.md", text, ".factory/MAINTENANCE.md: current bootstrap from the zen-of-projects Skill")
     if (d / ".factory/DAILY.md").exists():
         (d / ".factory/DAILY.md").unlink()
         changes.append("remove .factory/DAILY.md (renamed to MAINTENANCE.md)")
+
+    if kind == "node":
+        # No MCP server; only the Skill fetch needs approving.
+        st = load_json(d / ".claude/settings.json")
+        if st is None:
+            changes.append(".claude/settings.json: not valid JSON, left alone")
+            return kind, changes
+        allow = st.setdefault("permissions", {}).setdefault("allow", [])
+        if f"Bash({FETCH_CMD})" not in allow:
+            allow.append(f"Bash({FETCH_CMD})")
+            write_json(".claude/settings.json", st, ".claude/settings.json: approve the Skill fetch")
+        return kind, changes
 
     if kind == "sbt":
         mcp = load_json(d / ".mcp.json") or {}

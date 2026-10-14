@@ -21,6 +21,8 @@ has() { gh api "repos/$repo/contents/$1?ref=$default" --silent 2>/dev/null; }
 files=".factory/MAINTENANCE.md AGENTS.md .github/workflows"
 if has build.sbt || has pom.xml || has build.gradle.kts || has build.gradle; then
   files="$files .mcp.json .claude/settings.json .kiro/settings/mcp.json"   # build projects: MCP config
+elif has package.json; then
+  files="$files .claude/settings.json package-lock.json"                  # Node projects: no MCP
 else
   files="$files .slugignore"                                              # static sites: no MCP
 fi
