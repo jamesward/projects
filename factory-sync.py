@@ -21,7 +21,7 @@ compared with the canonical factory files:
   .kiro/settings/mcp.json    the factory-owned server entry; others kept
   .github/dependabot.yml     must not exist
   line endings               files stored as their .gitattributes say (no diff in a fresh clone)
-  label needs-human          must exist
+  labels                     needs-human and factory-improvement must exist
 
 AGENTS.md and everything else are left to each repo's maintenance routine. --apply commits to the
 bot-owned branch claude/factory-sync, opens or updates one PR titled 'Factory sync: ...', and
@@ -60,8 +60,10 @@ FETCH_CMD = ("git clone -q --depth 1 https://github.com/jamesward/skills /tmp/ja
 OLD_FETCH_CMDS = ["mkdir -p /tmp/zen-of-projects && curl -fsSL --retry 5 --retry-delay 10 --retry-all-errors "
                   "https://start.jamesward.com -o /tmp/zen-of-projects/SKILL.md"]
 SKILL_FILE = "/tmp/jamesward-skills/skills/zen-of-projects/SKILL.md"
-LABEL = {"name": "needs-human", "color": "B60205",
-         "description": "The maintenance routine needs a maintainer decision"}
+LABELS = [{"name": "needs-human", "color": "B60205",
+           "description": "The maintenance routine needs a maintainer decision"},
+          {"name": "factory-improvement", "color": "0E8A16",
+           "description": "Proposed by a maintenance routine run; needs a maintainer to review"}]
 
 
 def run(*cmd, cwd=None, check=True, input=None):
@@ -273,11 +275,11 @@ def desired(repo, d, boot):
 
 def ensure_label(repo, apply):
     names = {l["name"] for l in gh(f"repos/{repo}/labels?per_page=100")}
-    if LABEL["name"] in names:
-        return []
+    missing = [l for l in LABELS if l["name"] not in names]
     if apply:
-        gh(f"repos/{repo}/labels", "POST", LABEL)
-    return ["create the needs-human label"]
+        for l in missing:
+            gh(f"repos/{repo}/labels", "POST", l)
+    return [f"create the {l['name']} label" for l in missing]
 
 
 def open_pr(repo):
@@ -345,7 +347,7 @@ def main():
             kind, changes = desired(repo, d, boot)
             label = ensure_label(repo, apply)
             if not changes:
-                print(f"=  {repo} ({kind}): in sync{'; ' + label[0] if label else ''}"
+                print(f"=  {repo} ({kind}): in sync{'; ' + '; '.join(label) if label else ''}"
                       + (f"; open PR #{pr['number']} left for merge check" if pr else ""))
                 if pr and apply:
                     pending_prs.append((repo, pr["number"]))
