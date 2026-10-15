@@ -41,7 +41,9 @@ Done (2026-10-04): zen-of-projects Maintenance Routine step 8 has each run revie
 
 ## Open work
 
-- **sbt-mcp: false `[ok]` after a reload.** In sbt-webjars' 2026-10-13 run, `sbt-task "+compile; scripted"` right after `reload` returned `[ok] ... elapsed: 77 ms, captured output: empty` without running anything. Reproduce in a scripted test (reload, then a long command) and fix, or make the response say the command didn't run.
+- **Health check 2026-10-14** (44 runs since 10-06): ~34 merged after CI, 5 stopped on Maven Central 429 (all before the Gradle/Maven mirror and `JDK_JAVA_OPTIONS` fixes), 2 need-human. Only 1 `Factory improvement:` PR came out of ~40 runs; most findings were written only into each repo's PR description. Step 8 is now required and stricter (zen-of-projects after 0.0.14). Re-check after the next release: re-run the 429 routines (sbt-mcp, sbt-sass, skillsjars-sbt-plugin, login-jamesward-dev, spring-ai-mcp-demo) and count `Factory improvement:` PRs and issues a week later.
+
+- **sbt-mcp: false `[ok]` after a reload** (fixed in 0.1.8: the real cause was multi-command lines `a; b` being queued and dropped, not the reload). In sbt-webjars' 2026-10-13 run, `sbt-task "+compile; scripted"` right after `reload` returned `[ok] ... elapsed: 77 ms, captured output: empty` without running anything. Reproduce in a scripted test (reload, then a long command) and fix, or make the response say the command didn't run.
 - **Dependabot alerts in cloud runs:** `gh api .../dependabot/alerts` gets `403 Resource not accessible by integration`, so routines can't do step 4 there. Options: a local scheduled check, or ask whether the GitHub proxy can grant `security_events` read.
 - **Push notifications** are still sent by some failing runs despite the bootstrap saying not to.
 
