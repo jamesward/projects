@@ -41,6 +41,10 @@ Done (2026-10-04): zen-of-projects Maintenance Routine step 8 has each run revie
 
 ## Open work
 
+- **Re-runs on skills 0.0.15 (2026-10-15):** the 429 fix holds for sbt (sbt-mcp, sbt-sass, skillsjars-sbt-plugin: no 429s). Gradle repos stopped on a 429 for `skills-0.0.15.pom` because the Google mirror didn't have a 1-hour-old release yet (404), so Gradle fell back to Central; the Skill now treats that like "Not found". Step 8 still filed nothing in 3 runs that had findings: the bootstrap now requires a link per finding before merging (zen-of-projects main, after 0.0.15). Re-check next week.
+- **webjars CI:** tests call the live GitHub API and fail on its rate limit (`Response was 429 - API rate limit exceeded`); third time in two weeks. Needs a token in CI or the tests should treat 429 as skip.
+- **sbt-mcp#12:** `scripted server/build-tools` fails in cloud sessions only.
+
 - **Health check 2026-10-14** (44 runs since 10-06): ~34 merged after CI, 5 stopped on Maven Central 429 (all before the Gradle/Maven mirror and `JDK_JAVA_OPTIONS` fixes), 2 need-human. Only 1 `Factory improvement:` PR came out of ~40 runs; most findings were written only into each repo's PR description. Step 8 is now required and stricter (zen-of-projects after 0.0.14). Re-check after the next release: re-run the 429 routines (sbt-mcp, sbt-sass, skillsjars-sbt-plugin, login-jamesward-dev, spring-ai-mcp-demo) and count `Factory improvement:` PRs and issues a week later.
 
 - **sbt-mcp: false `[ok]` after a reload** (fixed in 0.1.8: the real cause was multi-command lines `a; b` being queued and dropped, not the reload). In sbt-webjars' 2026-10-13 run, `sbt-task "+compile; scripted"` right after `reload` returned `[ok] ... elapsed: 77 ms, captured output: empty` without running anything. Reproduce in a scripted test (reload, then a long command) and fix, or make the response say the command didn't run.
