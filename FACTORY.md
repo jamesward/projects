@@ -289,6 +289,7 @@ It only reports by default. `--apply` creates or updates routines to match the t
 | `jamesward/cfn-pkl-extras` | Tue | 07:27 | `trig_01EtjTMoEEM3A7mDVT2svqgx` |
 | `jamesward/pklgha` | Wed | 07:27 | `trig_01RPBKeF8x8DcuCuVKYH1kqL` |
 | `jamesward/semver-as-a-service` | Thu | 07:27 | `trig_013cxpJ2DQDz4aiwdrkTYKJf` |
+| `jamesward/exquisite_evals` | Fri | 07:27 | `trig_01Q61nxS5FSGcj5UoR4ny8bt` |
 
 ## Registries & Production Identifiers
 
@@ -373,6 +374,14 @@ Examples of structured concurrency
 
 Source: https://github.com/jamesward/easyracer
 Container: ghcr.io/jamesward/easyracer:latest
+
+
+### Exquisite Evals
+
+Spring AI evals demo (Kotlin, Gradle): agents with different tool sets work out an unfamiliar Java library's API, graded by code checks, an LLM judge and Jev. Slides on GitHub Pages.
+
+Source: https://github.com/jamesward/exquisite_evals
+Slides: https://jamesward.github.io/exquisite_evals/
 
 
 ### evals-demo
