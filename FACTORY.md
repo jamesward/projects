@@ -204,6 +204,8 @@ The guidance is the "Website Projects" section of zen-of-projects. Static sites 
 
 ## Factory sync
 
+**Needs-you digest.** The factory opens PRs and issues as your own GitHub user, and GitHub never notifies you about your own activity. So every `factory-sync.py` run ends with a "Needs you" list: open PRs and issues labeled `needs-human` or `factory-improvement` in the managed repos, `jamesward/projects` and `jamesward/skills`, oldest first, with links and age. The daily `factory sync` routine ends its reply with that list, and the routine's result email delivers it. `./factory-sync.py --digest` prints only the list. For an on-demand view: [GitHub search](https://github.com/search?q=is%3Aopen+label%3Aneeds-human%2Cfactory-improvement+archived%3Afalse+user%3Ajamesward+user%3Awebjars+user%3Askillsjars+user%3AEffectOrientedProgramming+user%3AMindviewLLC&type=issues).
+
 [`factory-sync.py`](factory-sync.py) keeps the factory-owned files in every managed repo (the repos in "Managed Repos & Schedules") equal to the factory's current versions, without running any repo's routine:
 - `.factory/MAINTENANCE.md`: the bootstrap from the published zen-of-projects Skill (jamesward/skills `main`), or the no-Skills-dependency variant. ai4jvm and podcast keep their own.
 - `.claude/sbt-mcp-stdio.sh`: [`sbt-mcp-stdio.sh`](sbt-mcp-stdio.sh) here, for sbt repos.
@@ -216,7 +218,7 @@ The routine `factory sync` (`trig_01NUJivtCGbUbQCyZjZAju5w`, daily 05:07 America
 
 1. Run `./factory-sync.py --list`. For each repo, call the `add_repo` tool (load it with ToolSearch) with `access: "push"`, one call at a time, and don't clone them; the script clones what it needs.
 2. Run `python3 -u ./factory-sync.py --apply` with a 30-minute command timeout, as that exact command with nothing piped after it (its output is short).
-3. Reply with the script's summary line and every line starting with `~`, `!!` or `   ` (PR numbers and merge results). If a repo failed (`!!`) or a PR got `needs-human`, say why. If a command is denied, quote the denial and stop. Don't send push notifications; the routine emails its result. Change nothing else: don't edit files in this repo or in the managed repos by hand, and don't run any repo's maintenance routine.
+3. Reply with the script's summary line, every line starting with `~`, `!!` or `   ` (PR numbers and merge results), and then its whole "Needs you" section, verbatim, as the end of the reply. If a repo failed (`!!`) or a PR got `needs-human`, say why. If a command is denied, quote the denial and stop. Don't send push notifications; the routine emails its result. Change nothing else: don't edit files in this repo or in the managed repos by hand, and don't run any repo's maintenance routine.
 
 **Classifier denials.** On 2026-10-07, 10-08 and 10-09 the auto mode classifier denied `python3 -u ./factory-sync.py --apply` ("Permission Grant", "Modify Shared Resources"); 10-09 05:08 got through, so it isn't consistent. Pre-approving the exact command in `.claude/settings.json` didn't help: the classifier still denied a character-for-character match. What worked (10-09 16:31) was saying in the routine's own prompt that the owner authorizes it to open, update and merge `Factory sync:` PRs in the repos `--list` prints. Keep that sentence in the prompt, and keep the prompt's steps in step with the list above. The allowlist in `.claude/settings.json` stays as a harmless backstop.
 

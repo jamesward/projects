@@ -5,6 +5,7 @@
     ./factory-sync.py --apply          # open/update a 'Factory sync:' PR per drifted repo, merge after CI
     ./factory-sync.py --list           # print the managed repos (for add_repo in a cloud session)
     ./factory-sync.py owner/repo ...   # limit to these repos
+    ./factory-sync.py --digest         # only list open items that need the owner (see below)
 
 Managed repos are the ones in FACTORY.md's schedule tables. For each, the default branch is
 compared with the canonical factory files:
@@ -27,7 +28,13 @@ AGENTS.md and everything else are left to each repo's maintenance routine. --app
 bot-owned branch claude/factory-sync, opens or updates one PR titled 'Factory sync: ...', and
 squash-merges it once its CI checks have run and passed. A PR with failing or no checks gets the
 needs-human label and a comment. A PR whose checks are still running is left for the next run.
-It never triggers a routine. Uses only git and `gh api` (REST), so it also works in cloud sessions.
+It never triggers a routine.
+
+Every run ends with a "Needs you" digest: the open PRs and issues labeled needs-human or
+factory-improvement in the managed repos plus jamesward/projects and jamesward/skills. The factory
+opens them as the owner's own GitHub user, so GitHub never notifies the owner about them; the daily
+routine's emailed reply carries this list instead. It reads each repo's issues endpoint (not the
+search API), which works for the repos attached to a cloud session. Uses only git and `gh api` (REST), so it also works in cloud sessions.
 """
 import json
 import os
@@ -316,6 +323,39 @@ def clone(repo, branch, d, attempts=3):
         time.sleep(10 * (i + 1))
 
 
+DIGEST_LABELS = ("needs-human", "factory-improvement")
+FACTORY_REPOS = ["jamesward/projects", "jamesward/skills"]
+
+
+def digest(repos):
+    """Open PRs and issues with a DIGEST_LABELS label, oldest first."""
+    items, failed = [], []
+    now = time.time()
+    for repo in sorted(set(repos) | set(FACTORY_REPOS)):
+        try:
+            page = gh(f"repos/{repo}/issues?state=open&per_page=100")
+        except Exception as e:
+            failed.append(f"{repo}: {str(e).splitlines()[-1][:120]}")
+            continue
+        for i in page:
+            labels = [l["name"] for l in i.get("labels", [])]
+            hit = [l for l in labels if l in DIGEST_LABELS]
+            if not hit:
+                continue
+            created = time.mktime(time.strptime(i["created_at"], "%Y-%m-%dT%H:%M:%SZ")) - time.timezone
+            items.append((created, repo, i, hit))
+    items.sort(key=lambda t: t[0])
+    print(f"\n## Needs you ({len(items)} open)")
+    if not items:
+        print("Nothing open is labeled needs-human or factory-improvement.")
+    for created, repo, i, hit in items:
+        kind = "PR" if "pull_request" in i else "issue"
+        days = int((now - created) // 86400)
+        print(f"- [{repo}#{i['number']}]({i['html_url']}) {kind}, {', '.join(hit)}, {days}d: {i['title']}")
+    for f in failed:
+        print(f"- (couldn't read {f})")
+
+
 # ---------- main ----------
 
 def main():
@@ -323,7 +363,10 @@ def main():
     apply = "--apply" in sys.argv
     repos = managed_repos()
     if "--list" in sys.argv:
-        print("\n".join(repos))
+        print("\n".join(repos + [r for r in FACTORY_REPOS if r not in repos]))
+        return
+    if "--digest" in sys.argv:
+        digest(repos)
         return
     if args:
         unknown = set(args) - set(repos)
@@ -422,6 +465,7 @@ def main():
                 time.sleep(30)
 
     print(f"\n{drifted} of {len(repos)} repo(s) drifted." + ("" if apply or not drifted else " Run with --apply to fix."))
+    digest(repos)
     run("rm", "-rf", str(work), check=False)
 
 
