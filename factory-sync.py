@@ -10,7 +10,7 @@
 Managed repos are the ones in FACTORY.md's schedule tables. For each, the default branch is
 compared with the canonical factory files:
 
-  .factory/MAINTENANCE.md    (Node repos get the no-Skills-dependency variant and no MCP files)
+  .factory/MAINTENANCE.md    (Node and buildpack repos get the no-Skills-dependency variant and no MCP files)
                              the bootstrap in the published zen-of-projects Skill (jamesward/skills main,
                              which start.jamesward.com serves);
                              a no-Skills-dependency variant for NO_SKILLS_DEP; CUSTOM_MAINTENANCE skipped
@@ -180,7 +180,8 @@ def desired(repo, d, boot):
     changes = []
     kind = "sbt" if (d / "build.sbt").exists() else (
         "jvm" if any((d / f).exists() for f in ("pom.xml", "build.gradle.kts", "build.gradle")) else (
-        "node" if (d / "package.json").exists() else "site"))
+        "node" if (d / "package.json").exists() else (
+        "buildpack" if (d / "bin/compile").exists() and (d / "bin/detect").exists() else "site")))
 
     def write(rel, text, why):
         p = d / rel
@@ -196,8 +197,9 @@ def desired(repo, d, boot):
     # Files committed against their .gitattributes line-ending rules (e.g. gradlew.bat with
     # `*.bat text eol=crlf`) show as modified in every fresh clone, which trips the cloud
     # sessions' "uncommitted changes" Stop hook. Store them normalized.
+    staged = set(run("git", "diff", "--cached", "--name-only", cwd=d).stdout.split())
     run("git", "add", "--renormalize", ".", cwd=d)
-    renorm = run("git", "diff", "--cached", "--name-only", cwd=d).stdout.split()
+    renorm = [f for f in run("git", "diff", "--cached", "--name-only", cwd=d).stdout.split() if f not in staged]
     if renorm:
         changes.append(f"renormalize line endings per .gitattributes: {', '.join(renorm)}")
 
@@ -209,14 +211,14 @@ def desired(repo, d, boot):
     if repo in CUSTOM_MAINTENANCE or kind == "site":
         return kind, changes
 
-    no_skills = repo in NO_SKILLS_DEP or kind == "node"  # npm has no SkillsJars
+    no_skills = repo in NO_SKILLS_DEP or kind in ("node", "buildpack")  # no SkillsJars for npm or bash
     text = no_skills_bootstrap(boot) if no_skills else boot
     write(".factory/MAINTENANCE.md", text, ".factory/MAINTENANCE.md: current bootstrap from the zen-of-projects Skill")
     if (d / ".factory/DAILY.md").exists():
         (d / ".factory/DAILY.md").unlink()
         changes.append("remove .factory/DAILY.md (renamed to MAINTENANCE.md)")
 
-    if kind == "node":
+    if kind in ("node", "buildpack"):
         # No MCP server; only the Skill fetch needs approving.
         st = load_json(d / ".claude/settings.json")
         if st is None:

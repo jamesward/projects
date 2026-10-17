@@ -181,7 +181,7 @@ The conventions are zen-of-projects "Node.js Projects". Set up this way: `jamesw
    - `AGENTS.md`: commands, production app and URL, exceptions;
    - no `.github/dependabot.yml`.
 2. **Factory files:** `factory-sync.py` treats a repo with `package.json` and no JVM build as `node`: it writes the no-Skills-dependency `MAINTENANCE.md` (npm has no SkillsJars) and approves the Skill clone in `.claude/settings.json`; no MCP files.
-3. **Production:** a merge to the default branch deploys when the Heroku app has GitHub auto-deploy. Check `heroku releases --app <app>` and the URL after the first merge.
+3. **Production:** a merge to the default branch deploys when the Heroku app has GitHub auto-deploy. JVM servers on other buildpacks (Gradle/Maven) have the config var `JAVA_TOOL_OPTIONS=-XX:+ExitOnOutOfMemoryError` (set 2026-10-16 on login-jamesward-dev, mcp-apps-demo, mcp-sample); Scala servers get it from buildpack-scala. Check `heroku releases --app <app>` and the URL after the first merge.
 4. **GitHub access and routine:** the same as for sbt projects.
 
 ## Factory Setup: Websites (draft)
@@ -292,6 +292,8 @@ It only reports by default. `--apply` creates or updates routines to match the t
 | `jamesward/pklgha` | Wed | 07:27 | `trig_01RPBKeF8x8DcuCuVKYH1kqL` |
 | `jamesward/semver-as-a-service` | Thu | 07:27 | `trig_013cxpJ2DQDz4aiwdrkTYKJf` |
 | `jamesward/exquisite_evals` | Fri | 07:27 | `trig_01Q61nxS5FSGcj5UoR4ny8bt` |
+| `jamesward/buildpack-scala` | Mon | 07:37 | `trig_012EvnVwqqisTDC6UPE8P6pr` |
+| `jamesward/buildpack-scala-native` | Tue | 07:37 | `trig_01Bwh85yjf4gHGvySvvdXGQG` |
 
 ## Registries & Production Identifiers
 
@@ -420,10 +422,14 @@ Source: https://github.com/jamesward/hello-zio-http
 
 ### Heroku Buildpack Scala
 
+Used by every factory Scala server on Heroku. Adds `-XX:+ExitOnOutOfMemoryError` to `JAVA_TOOL_OPTIONS` at dyno start. Managed weekly (zen-of-projects "Heroku Buildpack Projects": `bin/` changes need a human, because every app builds with `main`).
+
 Source: https://github.com/jamesward/buildpack-scala
 
 
 ### Heroku Buildpack Scala Native
+
+Used by cimdapp. Managed weekly (zen-of-projects "Heroku Buildpack Projects": `bin/` changes need a human, because every app builds with `main`).
 
 Source: https://github.com/jamesward/buildpack-scala-native
 
