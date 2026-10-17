@@ -39,6 +39,39 @@ Done (2026-10-04): zen-of-projects Maintenance Routine step 8 has each run revie
 - Should the evaluator also read local (non-routine) agent sessions, like the webjars one, or only routine runs?
 - How to evaluate cost (subscription usage per run) if the run logs don't expose it?
 
+## Production alerting for Heroku apps (ops routine)
+
+Goal: standard alerts on every factory Heroku app, defined by the factory, that start a Claude Code **ops routine** to triage, instead of the owner noticing outages.
+
+### What exists (checked 2026-10-16)
+
+- **Heroku app webhooks** (`heroku webhooks:add -a <app> -i <entities> -l notify|sync -u <url> -t <authorization header> -s <hmac secret>`): HTTP POSTs on app events. Entities include `api:release`, `api:build`, `api:formation` and `dyno` (dyno state changes, likely including crashes: verify). The body is Heroku's own JSON; the only custom header is `Authorization`.
+- **Routine API trigger**: `POST https://api.anthropic.com/v1/claude_code/routines/<trig_id>/fire` with `Authorization: Bearer <routine token>`, `anthropic-beta: experimental-cc-routine-2026-04-01`, `anthropic-version: 2023-06-01`, and body `{"text": "..."}`. The text reaches the run wrapped in `<routine-fire-payload>` as untrusted data, so the routine's prompt must say to investigate it. API triggers (and their tokens) can only be added in the web UI. Research preview: shapes may change.
+- **Heroku threshold alerting** (response time and 5xx rate, from Application Metrics) only exists on professional dynos (Standard/Performance): today javadocs, webjars and webjars-file-service (Standard-2X). The rest are Basic/Eco. As far as I know it notifies by email/Dashboard, not webhook, and it's configured in the Dashboard (no CLI; check for an API).
+- **Log drains** (`heroku drains:add https://...`): every log line, including router and dyno error codes (H10 app crashed, H12 timeout, H13, R14/R15 memory, which `-XX:+ExitOnOutOfMemoryError` now turns into crashes/restarts).
+
+### The gap
+
+Heroku can't call `/fire` directly: it can't send the `anthropic-beta`/`anthropic-version` headers or a `{"text": ...}` body. So we need a small **relay**: receives Heroku webhooks (verify `Heroku-Webhook-Hmac-SHA256`) and/or an HTTPS log drain, filters (crash, H1x/R1x bursts, failed release), debounces per app (one fire per incident, not per log line), and POSTs `/fire` with a summary (app, event, recent error lines, last release). Options: a tiny service on Heroku itself (then it can't report its own outage), or something outside Heroku (AWS Lambda behind a function URL, Cloudflare Worker). The relay holds the routine token as a secret.
+
+### Factory-defined standard alerts (sketch)
+
+- A `factory-heroku.py` (like `factory-github-settings.py`): reads the Heroku apps in FACTORY.md, reports/fixes drift: the relay webhook (`dyno,api:release,api:build`), the relay log drain, the buildpacks rule (zen-of-projects "Heroku deploys"), `JAVA_TOOL_OPTIONS` ExitOnOutOfMemoryError for non-Scala JVM apps, and threshold alerts where the dyno tier supports them (reported only, if there's no API).
+- Optionally an uptime check: a URL per app in FACTORY.md, probed by the relay on a schedule, since a dead app that emits no events alerts nothing.
+
+### The ops routine (to design)
+
+- One routine (`ops`) on `jamesward/projects`, API trigger only. Prompt: investigate the incident in the `routine-fire-payload` block; find the app's repo from FACTORY.md (`add_repo`); correlate with the last release/merge and the PR that caused it; check the production URL.
+- Output: an issue in the app's repo labeled `needs-human` and `incident` with the evidence and a proposed fix (or a fix PR, never merged automatically), plus the routine's email. It must not roll back, restart or change config on its own, at least at first.
+- Heroku access: routines have no Heroku credentials, and environment variables are visible to anyone using the environment. Options: the relay includes recent log lines and release info in the fire text (no credentials in the routine), or a separate cloud environment for ops with a read-scoped token (`heroku authorizations:create --scope read`; check whether logs need more than `read`).
+
+### Open questions
+
+- Which Heroku events really signal "down": does the `dyno` webhook fire on crashes and R14/R15 restarts?
+- Where the relay runs, and who watches the relay.
+- Debounce and rate limits: routine runs count against the subscription (100 scheduled runs/hour; check API-trigger limits).
+- Pricing: threshold alerts need professional dynos; log volume for a drain.
+
 ## Open work
 
 - **Re-runs on skills 0.0.15 (2026-10-15):** the 429 fix holds for sbt (sbt-mcp, sbt-sass, skillsjars-sbt-plugin: no 429s). Gradle repos stopped on a 429 for `skills-0.0.15.pom` because the Google mirror didn't have a 1-hour-old release yet (404), so Gradle fell back to Central; the Skill now treats that like "Not found". Step 8 still filed nothing in 3 runs that had findings: the bootstrap now requires a link per finding before merging (zen-of-projects main, after 0.0.15). Re-check next week.
