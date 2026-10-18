@@ -93,7 +93,7 @@ One reusable environment for all managed repos (claude.ai/code → environment s
 ### 3. MCP in routines
 
 - Every sbt repo's MCP server is [sbta](https://github.com/jamesward/sbta): `.mcp.json` runs `./sbta --mcp` (stdio, 30-minute timeout), approved in `.claude/settings.json`; Kiro's `.kiro/settings/mcp.json` has the same entry. sbta starts sbt when it isn't running (`./sbta --client`) and talks to sbt's own server, so there's no plugin, port or bridge, and the server survives reloads. It proxies the javadocs.dev tools. Logs: `project/target/sbta/mcp.log` and `boot.log`.
-- The launchers `sbta`/`sbta.bat` come from sbta's latest GitHub release; on first use they download the sbta jar from the release (works in cloud sessions). `factory-sync.py` keeps them, the MCP configs and the `AGENTS.md` bullet current, and removes `./sbt`, `sbt.bat`, the sbt-mcp plugin, its settings and the old stdio bridge (`factory_sbta.py`). Exceptions: jamesward/sbta (builds its own launchers) and jamesward/sbt-mcp.
+- The launchers `sbta`/`sbta.bat` come from sbta's latest GitHub release; on first use they download the sbta jar from the release (works in cloud sessions). `factory-sync.py` keeps them, the MCP configs and the `AGENTS.md` bullet current, and removes `./sbt`, `sbt.bat`, the sbt-mcp plugin, its settings and the old stdio bridge (`factory_sbta.py`). Exception: jamesward/sbta (builds its own launchers).
 - Verified 2026-10-17 on hello-zio-http: CI, a Heroku build (`Running ./sbta stage`), and a cloud routine run that loaded the `sbta` tools and used `get_latest_version` and `sbt-task` with no connection errors.
 - Maven and Gradle repos register the `javadocs` server (`https://www.javadocs.dev/mcp`) directly.
 
@@ -217,7 +217,6 @@ It only reports by default. `--apply` creates or updates routines to match the t
 | `jamesward/jev-llm-c4` | Tue | 06:17 | `trig_01Kk7rN2xfEQZ8Z9RRkMSXzU` |
 | `jamesward/jevlm` | Wed | 06:17 | `trig_014mdtwSnD7rwhc2V4Y5776C` |
 | `jamesward/json-paste` | Thu | 06:17 | `trig_01E264FBCwMsUogtU2QdMXHN` |
-| `jamesward/sbt-mcp` | Fri | 06:17 | `trig_01225Q5bDreRDz21kP46AY2n` |
 | `jamesward/sbt-reload` | Mon | 06:27 | `trig_01EgRxaWB4NrEFqDNX6xGNd7` |
 | `jamesward/sbt-sass` | Tue | 06:27 | `trig_01NSc4mKG4sXe3uUwLLer5Mv` |
 | `jamesward/sbt-tdepver` | Wed | 06:27 | `trig_01AF4H87AquwQAepJUDWHYN1` |
@@ -476,12 +475,6 @@ sbt launcher with an MCP server (replaces sbt-mcp): every managed sbt repo commi
 Source: https://github.com/jamesward/sbta
 
 
-### sbt-mcp
-
-Source: https://github.com/jamesward/sbt-mcp
-Maven Central: com.jamesward:sbt-mcp_sbt2_3
-
-
 ### sbt-reload
 
 Source: https://github.com/jamesward/sbt-reload
@@ -686,3 +679,11 @@ Heroku App: eop-login
 
 Source: https://github.com/EffectOrientedProgramming/mcp
 Heroku App: eop-mcp
+
+
+### sbt-mcp
+
+sbt plugin with an MCP server, replaced by sbta (2026-10-17). Not maintained: no routine (its `sbt-mcp maintenance` routine, `trig_01225Q5bDreRDz21kP46AY2n`, is disabled), and the factory scripts ignore it. Releases up to 0.1.8 stay on Maven Central.
+
+Source: https://github.com/jamesward/sbt-mcp
+Maven Central: com.jamesward:sbt-mcp_sbt2_3

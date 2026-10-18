@@ -29,7 +29,7 @@ Goal: every routine run is evaluated afterwards, and what it reveals improves th
 
 Done (2026-10-04): zen-of-projects Maintenance Routine step 8 has each run review itself and open `Factory improvement:` PRs (label `factory-improvement`, never merged) in `jamesward/skills` or `jamesward/projects`, attaching them with `add_repo` (`access: "push"`). Verified in a routine run: no prompts or denials, clones, push dry-run and `gh api` all work. Extra routine sources were rejected because they stop `.mcp.json` from loading. Applies once the Skill is released (after 0.0.10) and each repo's routine picks it up.
 
-- **Later:** other maintained dependencies (sbt-mcp, SkillsJars plugins, cfn-pkl-extras, ...). Step 7 currently only suggests fixes for them in the PR description.
+- **Later:** other maintained dependencies (sbta, SkillsJars plugins, cfn-pkl-extras, ...). Step 7 currently only suggests fixes for them in the PR description.
 - **Watch for:** duplicate or noisy PRs across 44 weekly runs. If it happens, move to the evaluator routine (idea 3) or issues instead of PRs.
 
 ### Open questions
@@ -76,16 +76,11 @@ Heroku can't call `/fire` directly: it can't send the `anthropic-beta`/`anthropi
 
 - **Re-runs on skills 0.0.15 (2026-10-15):** the 429 fix holds for sbt (sbt-mcp, sbt-sass, skillsjars-sbt-plugin: no 429s). Gradle repos stopped on a 429 for `skills-0.0.15.pom` because the Google mirror didn't have a 1-hour-old release yet (404), so Gradle fell back to Central; the Skill now treats that like "Not found". Step 8 still filed nothing in 3 runs that had findings: the bootstrap now requires a link per finding before merging (zen-of-projects main, after 0.0.15). Re-check next week.
 - **webjars CI:** tests call the live GitHub API and fail on its rate limit (`Response was 429 - API rate limit exceeded`); third time in two weeks. Needs a token in CI or the tests should treat 429 as skip.
-- **sbt-mcp#12:** `scripted server/build-tools` fails in cloud sessions only.
 
 - **Health check 2026-10-14** (44 runs since 10-06): ~34 merged after CI, 5 stopped on Maven Central 429 (all before the Gradle/Maven mirror and `JDK_JAVA_OPTIONS` fixes), 2 need-human. Only 1 `Factory improvement:` PR came out of ~40 runs; most findings were written only into each repo's PR description. Step 8 is now required and stricter (zen-of-projects after 0.0.14). Re-check after the next release: re-run the 429 routines (sbt-mcp, sbt-sass, skillsjars-sbt-plugin, login-jamesward-dev, spring-ai-mcp-demo) and count `Factory improvement:` PRs and issues a week later.
 
-- **sbt-mcp: false `[ok]` after a reload** (fixed in 0.1.8: the real cause was multi-command lines `a; b` being queued and dropped, not the reload). In sbt-webjars' 2026-10-13 run, `sbt-task "+compile; scripted"` right after `reload` returned `[ok] ... elapsed: 77 ms, captured output: empty` without running anything. Reproduce in a scripted test (reload, then a long command) and fix, or make the response say the command didn't run.
 - **Dependabot alerts in cloud runs:** `gh api .../dependabot/alerts` gets `403 Resource not accessible by integration`, so routines can't do step 4 there. Options: a local scheduled check, or ask whether the GitHub proxy can grant `security_events` read.
 - **Push notifications** are still sent by some failing runs despite the bootstrap saying not to.
 
 - **Factory sync** (done 2026-10-05): `factory-sync.py` plus the daily `factory sync` routine keep factory-owned files current in all managed repos without running their routines (see FACTORY.md). Watch the first few daily runs; the cloud `--apply` path (PR, CI wait, merge through `gh api`) is only verified locally.
 
-- **sbt-mcp: test failure details in `sbt-task` responses.** Done in sbt-mcp 0.1.4/0.1.5; verified through MCP in webjars (`sbt-mcp test FAILED: webjars.GzipSpec / ... 8 was not equal to 9`). Skill guidance committed (unreleased); webjars on 0.1.5. Other repos pick up 0.1.5 on their next routine run.
-- **sbt-mcp: `set` and `reload` restart the MCP server** and drop the in-flight request. Documented in the Skill; a fix would keep the server across session reloads.
-- **sbt-mcp: "no sbt channel available yet"** at session start. Have `sbt-task` wait briefly for a channel instead of failing.

@@ -53,8 +53,8 @@ sys.path.insert(0, str(HERE))
 import factory_sbta  # noqa: E402
 
 # sbt repos whose launcher and MCP setup the factory doesn't touch: sbta builds its own
-# launchers (`./sbta sbtaInstall`); sbt-mcp is being retired and uses its own plugin.
-SBT_KEEP_LAUNCHER = {"jamesward/sbta", "jamesward/sbt-mcp"}
+# launchers (`./sbta sbtaInstall`).
+SBT_KEEP_LAUNCHER = {"jamesward/sbta"}
 SKILL_URL = "https://start.jamesward.com"
 BRANCH = "claude/factory-sync"
 CHECK_WAIT_SECONDS = int(os.environ.get("FACTORY_SYNC_CHECK_WAIT", "1200"))
@@ -242,8 +242,7 @@ def desired(repo, d, boot):
     if kind == "sbt":
         # sbta (https://github.com/jamesward/sbta) is the launcher and MCP server: latest release
         # scripts, no ./sbt / sbt.bat / sbt-mcp plugin, settings or bridge, the `sbta` server in the
-        # MCP configs, ./sbta in CI and docs. sbta's own repo builds its launchers itself, and
-        # sbt-mcp (being retired) keeps its own setup.
+        # MCP configs, ./sbta in CI and docs. sbta's own repo builds its launchers itself.
         if repo in SBT_KEEP_LAUNCHER:
             return kind, changes
         changes += factory_sbta.migrate(d)
