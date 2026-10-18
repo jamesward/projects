@@ -54,7 +54,7 @@ For any repo you put under the factory, whatever its build tool, run `~/projects
   - Then: **Repository access → Only select repositories → Select repositories → add the repo → Save.**
   - **Check it:** `gh` can't read the App's repository list (403), so use the disabled routine `github access check (on demand)` (`trig_01Rq62FE9XKNfZjbJxq2LWrR`). It clones every managed repo and runs `git push --dry-run` to a `claude/` branch through the App, creating nothing. Add new repos to it, then run it with `claude -p "/schedule run trig_01Rq62FE9XKNfZjbJxq2LWrR"` and read its reply. A missing repo fails with `remote: Claude doesn't have GitHub access to <repo>` (verified against a repo outside the App's list). It isn't in the schedule tables, so `factory-routines-sync.py` reports it as unmanaged and leaves it alone.
 - Routines act as you: commits, PRs, merges and comments carry your GitHub identity.
-- **Factory and Skills repos.** Every routine can also propose changes to `jamesward/projects` (this factory) and `jamesward/skills` (zen-of-projects step 8, "Improve the factory"). It attaches them at run time with the `add_repo` tool (`access: "push"`), which needs both repos in the personal App installation. They aren't routine sources: a routine with more than one source doesn't load the repo's `.mcp.json`, so sbt-mcp disappears (verified 2026-10-04). The PRs are titled `Factory improvement:`, labeled `factory-improvement`, and never merged by a routine. Review them like any other PR.
+- **Factory and Skills repos.** Every routine can also propose changes to `jamesward/projects` (this factory) and `jamesward/skills` (zen-of-projects step 8, "Improve the factory"). It attaches them at run time with the `add_repo` tool (`access: "push"`), which needs both repos in the personal App installation. They aren't routine sources: a routine with more than one source doesn't load the repo's `.mcp.json`, so the repo's MCP server disappears (verified 2026-10-04). The PRs are titled `Factory improvement:`, labeled `factory-improvement`, and never merged by a routine. Review them like any other PR.
 - Routines push only to `claude/`-prefixed branches. The rolling `Maintenance:` PR branch is one of these, so later runs can keep pushing to it.
 - In the cloud, `gh` authenticates through the GitHub proxy, so don't set `GH_TOKEN`/`GITHUB_TOKEN` in the environment. GraphQL-based `gh` commands such as `gh pr list` fail with a 403. Routines use the built-in GitHub tools or the REST API instead, as described in the Skill.
 - Branch protection: auto-merge needs your account to be allowed to merge after CI passes. Required reviews block it, and the PR is then left with `needs-human`.
@@ -88,53 +88,14 @@ One reusable environment for all managed repos (claude.ai/code → environment s
 
   `JDK_JAVA_OPTIONS` applies the mirror setup to every `java` process, including the nested sbt that `scripted` launches for sbt plugin tests. That child runs `java -Dsbt.global.base=<temp> -jar sbt-launch.jar` directly, so it doesn't read `~/.config/sbt/sbtopts` (only the `./sbt` script does), and its launcher looks for `repositories` under the temporary global base instead of `~/.sbt`. Without the variable, sbt-webjars' scripted tests resolved from repo1.maven.org and got HTTP 429 (2026-10-13). Verified locally with a logging mirror: with the variable, the scripted child resolved only through the mirror and passed. Every `java` launch prints `NOTE: Picked up JDK_JAVA_OPTIONS: ...` to stderr; that's expected.
 
-  `JAVA_HOME` pins sessions to the Java 25 the script installs. `SBT_LAUNCH_REPO` makes the `./sbt` script download `sbt-launch.jar` from the mirror. The timeouts give long sbt test runs room; the defaults are 2 minutes per command and 10 minutes at most. Don't put secrets here, because anyone using the environment can read them. Paid and integration test keys stay unset, so those tests are skipped.
+  `JAVA_HOME` pins sessions to the Java 25 the script installs. `SBT_LAUNCH_REPO` makes the launcher script download `sbt-launch.jar` from the mirror. The timeouts give long sbt test runs room; the defaults are 2 minutes per command and 10 minutes at most. Don't put secrets here, because anyone using the environment can read them. Paid and integration test keys stay unset, so those tests are skipped.
 
 ### 3. MCP in routines
 
-- Claude.ai connectors run through Anthropic's servers, not the session VM. A connector pointed at sbt-mcp (`127.0.0.1:<port>` inside the VM) can't reach it.
-- For version lookup and API docs, add javadocs.dev as a connector at claude.ai/customize/connectors with URL `https://www.javadocs.dev/mcp`, and include it in each routine. This supplies the `get_latest_version` / `get_source_file` tools the Skill refers to, without running sbt.
-- **sbt-mcp in routines.** A plain HTTP entry in `.mcp.json` fails with `ECONNREFUSED`, because Claude Code connects to MCP servers before anything could start sbt. Instead, each repo uses a stdio bridge, [`sbt-mcp-stdio.sh`](sbt-mcp-stdio.sh) in this directory:
-  - In cloud sessions (`CLAUDE_CODE_REMOTE=true`), it starts sbt in the foreground (`./sbt --server`, kept alive with a stdin that never closes) and waits for the port.
-    - It has to be a foreground sbt, because `sbt-task` needs an attached console channel. A daemon started by a one-off `./sbt <cmd>` answers `no sbt channel available yet`.
-    - Plain `./sbt <task>` calls still connect to the same server.
-  - It then relays each MCP message to sbt-mcp over HTTP, using a small stateless Python relay inside the script. When `build.sbt` changes, sbt reloads the build, which restarts the sbt-mcp HTTP server. `mcp-remote` never recovered from that (`fetch failed`); the relay waits for the server to come back. A request that is in flight during the reload returns an error asking the agent to retry.
-  - It reads the port from `mcpPort := <port>` in `build.sbt`, so the file is identical in every repo.
-  - Locally it only connects to an sbt you already started.
-  - Diagnostics go to `/tmp/sbt-mcp-stdio.log` and `/tmp/sbt-mcp-server.log`.
-
-  This is verified in a cloud routine for javadoccentral: the server connected and `get_latest_version` worked. The tools are deferred, so the agent must load them with ToolSearch; `MAINTENANCE.md` step 0 says so.
-- With the bridge, the javadocs.dev connector is optional, because sbt-mcp proxies the same tools. Use the connector only for repos without the bridge.
-
-#### Set up the sbt-mcp bridge in a repo
-
-Run from the repo root. `<name>` is the server name already in `.kiro/settings/mcp.json`, for example `sbt-mcp-zio-mavencentral`.
-
-1. Copy the bridge verbatim:
-
-   ```bash
-   mkdir -p .claude && cp ~/projects/projects/sbt-mcp-stdio.sh .claude/sbt-mcp-stdio.sh
-   ```
-
-2. Register it in `.mcp.json`, next to any servers already listed there:
-
-   ```json
-   { "mcpServers": { "<name>": { "type": "stdio", "command": "bash", "args": [".claude/sbt-mcp-stdio.sh"], "timeout": 1800000 } } }
-   ```
-
-   The 30-minute `timeout` (what `mcpInstall` recommends) lets long `sbt-task` calls such as `testFull` finish; without it a routine saw `tool "sbt-task" timed out after 60s`.
-
-3. Approve it in `.claude/settings.json`, merging with any settings already there: `{ "enabledMcpjsonServers": ["<name>"] }`. Without this the server stays `pending`.
-4. In `AGENTS.md`'s sbt-mcp section, note that Claude Code uses this bridge, that its tools are deferred (load them with ToolSearch, searching `<name>`), and where the diagnostics go.
-5. Verify locally with no sbt running (`./sbt shutdown` first). The run should list the server as `connected`, run `show name`, and return a version:
-
-   ```bash
-   CLAUDE_CODE_REMOTE=true MCP_TIMEOUT=600000 CLAUDE_CODE_MCP_STARTUP_WAIT_MS=600000 claude -p "Using only the MCP server <name>, call sbt-task with 'show name' and get_latest_version for com.jamesward:skills; reply with both results." --model haiku --max-turns 8 --allowedTools 'mcp__<name>__sbt-task' 'mcp__<name>__get_latest_version'
-   ./sbt shutdown
-   ```
-
-   This starts sbt the way a cloud session does, and the `claude -p` call makes a small paid request.
-6. Commit and push `.claude/sbt-mcp-stdio.sh`, `.claude/settings.json`, `.mcp.json`, `AGENTS.md` and `.factory/MAINTENANCE.md` to the default branch. The routine only sees what is on GitHub.
+- Every sbt repo's MCP server is [sbta](https://github.com/jamesward/sbta): `.mcp.json` runs `./sbta --mcp` (stdio, 30-minute timeout), approved in `.claude/settings.json`; Kiro's `.kiro/settings/mcp.json` has the same entry. sbta starts sbt when it isn't running (`./sbta --client`) and talks to sbt's own server, so there's no plugin, port or bridge, and the server survives reloads. It proxies the javadocs.dev tools. Logs: `project/target/sbta/mcp.log` and `boot.log`.
+- The launchers `sbta`/`sbta.bat` come from sbta's latest GitHub release; on first use they download the sbta jar from the release (works in cloud sessions). `factory-sync.py` keeps them, the MCP configs and the `AGENTS.md` bullet current, and removes `./sbt`, `sbt.bat`, the sbt-mcp plugin, its settings and the old stdio bridge (`factory_sbta.py`). Exceptions: jamesward/sbta (builds its own launchers) and jamesward/sbt-mcp.
+- Verified 2026-10-17 on hello-zio-http: CI, a Heroku build (`Running ./sbta stage`), and a cloud routine run that loaded the `sbta` tools and used `get_latest_version` and `sbt-task` with no connection errors.
+- Maven and Gradle repos register the `javadocs` server (`https://www.javadocs.dev/mcp`) directly.
 
 ### 4. Create the routine
 
@@ -144,7 +105,7 @@ Requires a claude.ai login, not an API key or Bedrock. First make sure that:
 
 Then add the repo to one of the tables in "Managed Repos & Schedules" and run `~/projects/projects/factory-routines-sync.py --apply`. The script creates the routine with the standard name, prompt, `JDK25` environment and no connectors. The server attaches every claude.ai connector to a new routine, and the script removes them.
 - Pick a time a few minutes past the hour, and stagger repos so they don't all hit Maven Central at once.
-- Repos with the sbt-mcp bridge get the javadocs.dev tools through sbt-mcp. Maven and Gradle repos get them from the `javadocs` server in `.mcp.json`.
+- sbt repos get the javadocs.dev tools through `sbta`. Maven and Gradle repos get them from the `javadocs` server in `.mcp.json`.
 
 Manage routines with `/schedule list`, `/schedule update` and `/schedule run`, and ask `/schedule why did <routine> fail?` to read a run's log. API triggers can only be added on the web (claude.ai/code/routines). A green run status only means the session exited cleanly; read the transcript to see whether the work succeeded.
 
@@ -152,7 +113,7 @@ Runs count against your subscription usage. Scheduled runs are limited to 100 pe
 
 ## Factory Setup: Maven & Gradle Projects
 
-These use the same routine, environment and `MAINTENANCE.md` as sbt projects. The conventions are in zen-of-projects ("Maven and Gradle Projects"). There is no sbt-mcp, so each repo registers the javadocs.dev MCP server directly.
+These use the same routine, environment and `MAINTENANCE.md` as sbt projects. The conventions are in zen-of-projects ("Maven and Gradle Projects"). There is no sbta, so each repo registers the javadocs.dev MCP server directly.
 
 1. **One-time:** GitHub access and the `JDK25` environment, as in sbt steps 1–2. `jdk25-setup.sh` also prefers the Google mirror for Gradle (an init script in `~/.gradle/init.d/` that puts it first in the build's own repositories) and Maven (an active profile in `~/.m2/settings.xml`), with Maven Central as the fallback. Before that, spring-ai-mcp-demo and mcp-apps-demo routines failed on `Received status code 429 from server: Too Many Requests` from Maven Central (2026-10-06). Verified locally with fresh caches: every download came from the mirror, for settings-level, project-level and Maven repositories.
 2. **Seed the repo,** using the snippets in the Skill. The first routine run aligns the rest.
@@ -208,8 +169,8 @@ The guidance is the "Website Projects" section of zen-of-projects. Static sites 
 
 [`factory-sync.py`](factory-sync.py) keeps the factory-owned files in every managed repo (the repos in "Managed Repos & Schedules") equal to the factory's current versions, without running any repo's routine:
 - `.factory/MAINTENANCE.md`: the bootstrap from the published zen-of-projects Skill (jamesward/skills `main`), or the no-Skills-dependency variant. ai4jvm and podcast keep their own.
-- `.claude/sbt-mcp-stdio.sh`: [`sbt-mcp-stdio.sh`](sbt-mcp-stdio.sh) here, for sbt repos.
-- The factory-owned entries in `.mcp.json`, `.claude/settings.json` and `.kiro/settings/mcp.json` (the sbt-mcp bridge or `javadocs`). Other servers and settings are kept.
+- sbt repos: `sbta` and `sbta.bat` from sbta's latest release, no `sbt`/`sbt.bat`/sbt-mcp, and `./sbta` in CI and docs (see "MCP in routines").
+- The factory-owned entries in `.mcp.json`, `.claude/settings.json` and `.kiro/settings/mcp.json` (`sbta` or `javadocs`). Other servers and settings are kept.
 - No `.github/dependabot.yml`; a `needs-human` label.
 
 `AGENTS.md` and everything else stay with each repo's maintenance routine. Without arguments the script only reports; `--apply` opens or updates one `Factory sync:` PR per drifted repo, from the branch `claude/factory-sync`, and squash-merges it once its CI has run and passed. Failing or missing CI gets `needs-human` and a comment; checks still running are left for the next run. Pass `owner/repo` arguments to limit it.
@@ -294,32 +255,9 @@ It only reports by default. `--apply` creates or updates routines to match the t
 | `jamesward/exquisite_evals` | Fri | 07:27 | `trig_01Q61nxS5FSGcj5UoR4ny8bt` |
 | `jamesward/buildpack-scala` | Mon | 07:37 | `trig_012EvnVwqqisTDC6UPE8P6pr` |
 | `jamesward/buildpack-scala-native` | Tue | 07:37 | `trig_01Bwh85yjf4gHGvySvvdXGQG` |
+| `jamesward/sbta` | Thu | 07:37 | `trig_01RfwYDrrxUNq3TxCCrXwnDq` |
 
 ## Registries & Production Identifiers
-
-### sbt-mcp port registry
-
-Each project gets one stable loopback port:
-
-| Port | Project | Port | Project |
-|------|---------|------|---------|
-| 5011 | sbt-mcp/test-project | 5110 | sbt-sass |
-| 5012 | toolbook | 5111 | sbt-tdepver |
-| 5014 | jev-llm-c4 | 5112 | skillsjars |
-| 5015 | jevlm | 5113 | skillsjars-sbt-plugin |
-| 5055 | webjars | 5114 | sbt-webjars |
-| 5100 | cimd.now (cimdtest) | 5115 | webjars-file-service |
-| 5101 | evals-demo | 5116 | zio-bedrock |
-| 5102 | hello-zio-bedrock | 5117 | zio-evals |
-| 5103 | hello-zio-http | 5118 | zio-git |
-| 5104 | hello-zio-mcp | 5119 | zio-http-guard |
-| 5105 | hello-zio-typesafe-ai | 5120 | zio-http-mcp |
-| 5106 | javadoccentral | 5121 | zio-mavencentral |
-| 5107 | json-paste | 5122 | zio-typesafe-ai |
-| 5108 | sbt-mcp | | |
-| 5109 | sbt-reload | | |
-
-Next free port: 5123
 
 ### Production service versions (Heroku, run locally)
 
@@ -529,6 +467,13 @@ Heroku Apps:
 ### Pkl GitHub Actions
 
 Source: https://github.com/jamesward/pklgha
+
+
+### sbta
+
+sbt launcher with an MCP server (replaces sbt-mcp): every managed sbt repo commits its `sbta`/`sbta.bat` from the latest release, and its MCP server is `sbta` (`./sbta --mcp`). Releases are GitHub releases only (tag `vX.Y.Z`); `factory-sync.py` copies the latest release's scripts into the managed repos.
+
+Source: https://github.com/jamesward/sbta
 
 
 ### sbt-mcp

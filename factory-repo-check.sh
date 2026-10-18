@@ -19,8 +19,13 @@ echo
 echo "1. Factory files on '$default' (routines only see the default branch)"
 has() { gh api "repos/$repo/contents/$1?ref=$default" --silent 2>/dev/null; }
 files=".factory/MAINTENANCE.md AGENTS.md .github/workflows"
-if has build.sbt || has pom.xml || has build.gradle.kts || has build.gradle; then
-  files="$files .mcp.json .claude/settings.json .kiro/settings/mcp.json"   # build projects: MCP config
+if has build.sbt; then
+  files="$files sbta sbta.bat .mcp.json .claude/settings.json .kiro/settings/mcp.json"   # sbt: sbta launcher + MCP
+  for f in sbt sbt.bat .claude/sbt-mcp-stdio.sh; do
+    if has "$f"; then todo "$f should be removed (sbta replaces it; factory-sync.py --apply does it)"; fi
+  done
+elif has pom.xml || has build.gradle.kts || has build.gradle; then
+  files="$files .mcp.json .claude/settings.json .kiro/settings/mcp.json"   # Maven/Gradle: javadocs MCP
 elif has package.json; then
   files="$files .claude/settings.json package-lock.json"                  # Node projects: no MCP
 else

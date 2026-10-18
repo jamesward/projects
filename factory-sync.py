@@ -14,9 +14,10 @@ compared with the canonical factory files:
                              the bootstrap in the published zen-of-projects Skill (jamesward/skills main,
                              which start.jamesward.com serves);
                              a no-Skills-dependency variant for NO_SKILLS_DEP; CUSTOM_MAINTENANCE skipped
-  .claude/sbt-mcp-stdio.sh   ./sbt-mcp-stdio.sh (sbt repos)
-  build.sbt                  sbt-mcp settings as `ThisBuild / mcp*`, not `Global /`
-  .mcp.json                  the factory-owned server entry (sbt-mcp bridge, or javadocs); others kept
+  sbt repos                  sbta: `sbta`/`sbta.bat` from its latest release, no `sbt`/`sbt.bat`, no
+                             sbt-mcp plugin/settings/bridge, the `sbta` MCP server, ./sbta in CI and
+                             docs (factory_sbta.py; not for SBT_KEEP_LAUNCHER)
+  .mcp.json                  the factory-owned server entry (sbta, or javadocs); others kept
   .claude/settings.json      that server in enabledMcpjsonServers (+ the Skill fetch permission for
                              NO_SKILLS_DEP); other settings kept
   .kiro/settings/mcp.json    the factory-owned server entry; others kept
@@ -48,7 +49,12 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 FACTORY = HERE / "FACTORY.md"
-BRIDGE = HERE / "sbt-mcp-stdio.sh"
+sys.path.insert(0, str(HERE))
+import factory_sbta  # noqa: E402
+
+# sbt repos whose launcher and MCP setup the factory doesn't touch: sbta builds its own
+# launchers (`./sbta sbtaInstall`); sbt-mcp is being retired and uses its own plugin.
+SBT_KEEP_LAUNCHER = {"jamesward/sbta", "jamesward/sbt-mcp"}
 SKILL_URL = "https://start.jamesward.com"
 BRANCH = "claude/factory-sync"
 CHECK_WAIT_SECONDS = int(os.environ.get("FACTORY_SYNC_CHECK_WAIT", "1200"))
@@ -112,9 +118,12 @@ SKILL_PATH = "skills/zen-of-projects/SKILL.md"
 
 
 def skill_text():
-    """The published zen-of-projects Skill. start.jamesward.com redirects to the raw file on
+    """The published zen-of-projects Skill (FACTORY_SKILL_FILE overrides it, for testing an
+    unreleased Skill locally). start.jamesward.com redirects to the raw file on
     jamesward/skills main; cloud sessions' git proxy refuses that raw fetch (HTTP 403) but serves
     git clones, so read it from a shallow clone and fall back to HTTP."""
+    if os.environ.get("FACTORY_SKILL_FILE"):
+        return Path(os.environ["FACTORY_SKILL_FILE"]).read_text()
     with tempfile.TemporaryDirectory() as t:
         r = run("git", "clone", "-q", "--depth", "1", SKILLS_REPO, t, check=False)
         if r.returncode == 0 and (Path(t) / SKILL_PATH).exists():
@@ -231,30 +240,14 @@ def desired(repo, d, boot):
         return kind, changes
 
     if kind == "sbt":
-        mcp = load_json(d / ".mcp.json") or {}
-        kiro = load_json(d / ".kiro/settings/mcp.json") or {}
-        names = [k for k in list(mcp.get("mcpServers", {})) + list(kiro.get("mcpServers", {})) if k.startswith("sbt-mcp")]
-        name = names[0] if names else f"sbt-mcp-{repo.split('/')[1]}"
-        port = re.search(r"mcpPort\s*:=\s*(\d+)", (d / "build.sbt").read_text())
-        # sbt-mcp settings use `ThisBuild /`: a source dependency's `Global / mcpPort` replaces
-        # a root build's `Global /` one (sbt-mcp source-dependency scripted test).
-        b = (d / "build.sbt").read_text()
-        b2 = re.sub(r"^Global(\s*)/(\s*)(mcpEnabled|mcpHost|mcpPort|mcpDisableInCI|mcpDocsUrl)\b", r"ThisBuild\1/\2\3", b, flags=re.M)
-        if b2 != b:
-            (d / "build.sbt").write_text(b2)
-            changes.append("build.sbt: sbt-mcp settings use ThisBuild / instead of Global /")
-        write(".claude/sbt-mcp-stdio.sh", BRIDGE.read_text(), ".claude/sbt-mcp-stdio.sh: current sbt-mcp stdio bridge")
-        os.chmod(d / ".claude/sbt-mcp-stdio.sh", 0o755)
-        bridge = {"type": "stdio", "command": "bash", "args": [".claude/sbt-mcp-stdio.sh"], "timeout": 1800000}
-        write_json(".mcp.json", put_server(d / ".mcp.json", name, bridge, changes, "sbt-mcp"),
-                   f".mcp.json: {name} uses the stdio bridge with a 30-minute timeout")
-        if port:
-            http = {"type": "http", "url": f"http://127.0.0.1:{port.group(1)}/", "timeout": 1800000, "disabled": False}
-            write_json(".kiro/settings/mcp.json", put_server(d / ".kiro/settings/mcp.json", name, http, changes, "sbt-mcp"),
-                       f".kiro/settings/mcp.json: {name} on port {port.group(1)} with a 30-minute timeout")
-        else:
-            changes.append("build.sbt has no mcpPort; .kiro/settings/mcp.json left alone")
-        server = name
+        # sbta (https://github.com/jamesward/sbta) is the launcher and MCP server: latest release
+        # scripts, no ./sbt / sbt.bat / sbt-mcp plugin, settings or bridge, the `sbta` server in the
+        # MCP configs, ./sbta in CI and docs. sbta's own repo builds its launchers itself, and
+        # sbt-mcp (being retired) keeps its own setup.
+        if repo in SBT_KEEP_LAUNCHER:
+            return kind, changes
+        changes += factory_sbta.migrate(d)
+        return kind, changes
     else:
         write_json(".mcp.json", put_server(d / ".mcp.json", "javadocs", JAVADOCS, changes),
                    ".mcp.json: javadocs MCP server")
