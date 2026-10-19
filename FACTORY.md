@@ -363,6 +363,8 @@ Used by every factory Scala server on Heroku. Adds `-XX:+ExitOnOutOfMemoryError`
 
 Source: https://github.com/jamesward/buildpack-scala
 
+Routine environment: the buildpack's validation needs `shellcheck` and an `sbt` on `PATH` (the fixture's `./sbt` calls the system `sbt`). The JDK25 environment has neither, so the 2026-10-19 run had to `apt-get install shellcheck` and download `sbt-2.0.11.tgz` from the sbt GitHub release by hand. Add both to `jdk25-setup.sh` (or the setup script for this repo) so the routine can run its full validation without ad-hoc installs.
+
 
 ### Heroku Buildpack Scala Native
 
