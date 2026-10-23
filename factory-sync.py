@@ -228,16 +228,30 @@ def desired(repo, d, boot):
         (d / ".factory/DAILY.md").unlink()
         changes.append("remove .factory/DAILY.md (renamed to MAINTENANCE.md)")
 
+    if kind == "buildpack":
+        # Buildpacks have sbt test fixtures: the javadocs server gives them get_latest_version
+        # (Maven Central metadata is rate-limited in cloud sessions).
+        write_json(".mcp.json", put_server(d / ".mcp.json", "javadocs", JAVADOCS, changes),
+                   ".mcp.json: javadocs MCP server")
+        write_json(".kiro/settings/mcp.json", put_server(d / ".kiro/settings/mcp.json", "javadocs", JAVADOCS, changes),
+                   ".kiro/settings/mcp.json: javadocs MCP server")
     if kind in ("node", "buildpack"):
-        # No MCP server; only the Skill fetch needs approving.
+        # Only the Skill fetch (and, for buildpacks, javadocs) needs approving.
         st = load_json(d / ".claude/settings.json")
         if st is None:
             changes.append(".claude/settings.json: not valid JSON, left alone")
             return kind, changes
+        before = json.dumps(st, sort_keys=True)
         allow = st.setdefault("permissions", {}).setdefault("allow", [])
         if f"Bash({FETCH_CMD})" not in allow:
             allow.append(f"Bash({FETCH_CMD})")
-            write_json(".claude/settings.json", st, ".claude/settings.json: approve the Skill fetch")
+        if kind == "buildpack":
+            en = st.setdefault("enabledMcpjsonServers", [])
+            if "javadocs" not in en:
+                en.append("javadocs")
+        if json.dumps(st, sort_keys=True) != before:
+            write_json(".claude/settings.json", st, ".claude/settings.json: approve the Skill fetch"
+                       + (" and javadocs" if kind == "buildpack" else ""))
         return kind, changes
 
     if kind == "sbt":

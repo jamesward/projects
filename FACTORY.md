@@ -66,10 +66,11 @@ One reusable environment for all managed repos (claude.ai/code → environment s
 - **Network access:** Full. Routines run builds and tests that reach Maven Central and its mirror, javadocs.dev, Docker registries and live services (for example `login.jamesward.dev` and `cimd.now` for zio-http-mcp), so an allowlist would keep breaking runs. The tradeoff is that code a routine runs, including dependencies and tests, can reach any host.
 - **Setup script:** paste the contents of [`jdk25-setup.sh`](jdk25-setup.sh) (in this directory) into the environment's Setup script field, e.g. `wl-copy < ~/projects/projects/jdk25-setup.sh`. It does three things:
   - Installs Java 25, the default Java for every managed repo. The base image only has OpenJDK 21.
+  - Installs `shellcheck` (the Heroku buildpack routines validate with it).
   - Applies the resolver setup from zen-of-projects "Resolvers". The sbt launcher and builds then download from the Google mirror and fall back to Maven Central.
   - Pre-downloads sbt into the environment cache.
 
-  Re-paste it after every change here (last: Gradle and Maven mirrors, 2026-10-07).
+  Re-paste it after every change here (last: shellcheck, 2026-10-23).
 
   Every command in it is on a single line, with no indentation or backslash continuations. A pasted continuation once merged lines and corrupted `~/.sbt/repositories` (`duplicate label 'local'`). The script fails if that file doesn't come out as exactly 4 lines. Edit the file, not the environment, then re-paste it.
 

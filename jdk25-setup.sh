@@ -6,6 +6,9 @@ apt-get update -qq && apt-get install -y -qq openjdk-25-jdk-headless || exit 1
 update-alternatives --set java /usr/lib/jvm/java-25-openjdk-amd64/bin/java || true
 java -version
 
+# --- shellcheck: the Heroku buildpack routines validate with it ---
+apt-get install -y -qq shellcheck || echo "shellcheck install failed (non-fatal)"
+
 # --- sbt: prefer the Google Maven Central mirror, fall back to Maven Central ---
 mkdir -p "$HOME/.sbt" "$HOME/.config/sbt"
 REPOS="$HOME/.sbt/repositories"
