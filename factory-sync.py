@@ -32,7 +32,8 @@ needs-human label and a comment. A PR whose checks are still running is left for
 It never triggers a routine.
 
 Every run ends with a "Needs you" digest: the open PRs and issues labeled needs-human or
-factory-improvement in the managed repos plus jamesward/projects and jamesward/skills. The factory
+factory-improvement, or titled "Factory improvement:", in the managed repos plus jamesward/projects
+and jamesward/skills; PRs that conflict with their base are marked as needing a rebase. The factory
 opens them as the owner's own GitHub user, so GitHub never notifies the owner about them; the daily
 routine's emailed reply carries this list instead. It reads each repo's issues endpoint (not the
 search API), which works for the repos attached to a cloud session. Uses only git and `gh api` (REST), so it also works in cloud sessions.
@@ -321,8 +322,23 @@ DIGEST_LABELS = ("needs-human", "factory-improvement")
 FACTORY_REPOS = ["jamesward/projects", "jamesward/skills"]
 
 
+FACTORY_IMPROVEMENT_TITLE = "Factory improvement:"
+
+
+def pr_conflicts(repo, number):
+    """True if the PR can't merge into its base as is (GitHub computes this lazily: retry once)."""
+    for attempt in range(3):
+        pr = gh(f"repos/{repo}/pulls/{number}", check=False) or {}
+        if pr.get("mergeable") is not None:
+            return pr["mergeable"] is False
+        time.sleep(3)
+    return False  # unknown: don't claim a conflict
+
+
 def digest(repos):
-    """Open PRs and issues with a DIGEST_LABELS label, oldest first."""
+    """Open PRs and issues that need the owner, oldest first: labeled with a DIGEST_LABELS label,
+    or titled "Factory improvement:" (routines don't always manage to add the label). PRs that
+    conflict with their base branch are marked, since they need a rebase before they can merge."""
     items, failed = [], []
     now = time.time()
     for repo in sorted(set(repos) | set(FACTORY_REPOS)):
@@ -334,18 +350,24 @@ def digest(repos):
         for i in page:
             labels = [l["name"] for l in i.get("labels", [])]
             hit = [l for l in labels if l in DIGEST_LABELS]
+            if i["title"].startswith(FACTORY_IMPROVEMENT_TITLE) and "factory-improvement" not in hit:
+                hit.append("factory-improvement (unlabeled)")
             if not hit:
                 continue
+            notes = []
+            if "pull_request" in i and pr_conflicts(repo, i["number"]):
+                notes.append("conflicts with the base branch: needs a rebase")
             created = time.mktime(time.strptime(i["created_at"], "%Y-%m-%dT%H:%M:%SZ")) - time.timezone
-            items.append((created, repo, i, hit))
+            items.append((created, repo, i, hit, notes))
     items.sort(key=lambda t: t[0])
     print(f"\n## Needs you ({len(items)} open)")
     if not items:
-        print("Nothing open is labeled needs-human or factory-improvement.")
-    for created, repo, i, hit in items:
+        print("Nothing open is labeled needs-human or factory-improvement, or titled \"Factory improvement:\".")
+    for created, repo, i, hit, notes in items:
         kind = "PR" if "pull_request" in i else "issue"
         days = int((now - created) // 86400)
-        print(f"- [{repo}#{i['number']}]({i['html_url']}) {kind}, {', '.join(hit)}, {days}d: {i['title']}")
+        extra = "".join(f"; **{n}**" for n in notes)
+        print(f"- [{repo}#{i['number']}]({i['html_url']}) {kind}, {', '.join(hit)}, {days}d{extra}: {i['title']}")
     for f in failed:
         print(f"- (couldn't read {f})")
 
