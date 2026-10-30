@@ -9,10 +9,10 @@ java -version
 # --- shellcheck: the Heroku buildpack routines validate with it ---
 apt-get install -y -qq shellcheck || echo "shellcheck install failed (non-fatal)"
 
-# --- Pkl CLI: repos with workflows written in Pkl regenerate their YAML with it (Java build, from the mirror) ---
+# --- Pkl CLI: repos with workflows written in Pkl regenerate their YAML with it (Java build, from the mirror). The wrapper gives Pkl the cloud proxy's CA (pklgha#12), which package:// fetches need ---
 PKL_VERSION=0.32.2
 PKL_PATH="org/pkl-lang/pkl-cli/$PKL_VERSION/pkl-cli-$PKL_VERSION-all.jar"
-mkdir -p /opt/pkl && { curl -fsSL -o /opt/pkl/pkl.jar "https://maven-central.storage-download.googleapis.com/maven2/$PKL_PATH" || curl -fsSL -o /opt/pkl/pkl.jar "https://repo1.maven.org/maven2/$PKL_PATH"; } && printf '%s\n' '#!/bin/sh' 'exec java --enable-native-access=ALL-UNNAMED -jar /opt/pkl/pkl.jar "$@"' > /usr/local/bin/pkl && chmod +x /usr/local/bin/pkl && pkl --version || echo "Pkl CLI install failed (non-fatal)"
+mkdir -p /opt/pkl && { curl -fsSL -o /opt/pkl/pkl.jar "https://maven-central.storage-download.googleapis.com/maven2/$PKL_PATH" || curl -fsSL -o /opt/pkl/pkl.jar "https://repo1.maven.org/maven2/$PKL_PATH"; } && printf '%s\n' '#!/bin/sh' '[ -s /root/.ccr/ca-bundle.crt ] && [ ! -e "$HOME/.pkl/cacerts/ca-bundle.crt" ] && mkdir -p "$HOME/.pkl/cacerts" && cp /root/.ccr/ca-bundle.crt "$HOME/.pkl/cacerts/"' 'exec java --enable-native-access=ALL-UNNAMED -jar /opt/pkl/pkl.jar "$@"' > /usr/local/bin/pkl && chmod +x /usr/local/bin/pkl && pkl --version || echo "Pkl CLI install failed (non-fatal)"
 
 # --- Chromium on PATH: browser tests (e.g. kyo-browser in json-paste) use a system Chrome when one is on PATH; the image's Playwright Chromium is in a versioned dir ---
 PW_CHROME="$(find /opt/pw-browsers -path '*chromium-*' -type f -name chrome -perm -u+x 2>/dev/null | sort -V | tail -1)"
