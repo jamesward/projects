@@ -9,6 +9,11 @@ java -version
 # --- shellcheck: the Heroku buildpack routines validate with it ---
 apt-get install -y -qq shellcheck || echo "shellcheck install failed (non-fatal)"
 
+# --- Pkl CLI: repos with workflows written in Pkl regenerate their YAML with it (Java build, from the mirror) ---
+PKL_VERSION=0.32.2
+PKL_PATH="org/pkl-lang/pkl-cli/$PKL_VERSION/pkl-cli-$PKL_VERSION-all.jar"
+mkdir -p /opt/pkl && { curl -fsSL -o /opt/pkl/pkl.jar "https://maven-central.storage-download.googleapis.com/maven2/$PKL_PATH" || curl -fsSL -o /opt/pkl/pkl.jar "https://repo1.maven.org/maven2/$PKL_PATH"; } && printf '%s\n' '#!/bin/sh' 'exec java --enable-native-access=ALL-UNNAMED -jar /opt/pkl/pkl.jar "$@"' > /usr/local/bin/pkl && chmod +x /usr/local/bin/pkl && pkl --version || echo "Pkl CLI install failed (non-fatal)"
+
 # --- sbt: prefer the Google Maven Central mirror, fall back to Maven Central ---
 mkdir -p "$HOME/.sbt" "$HOME/.config/sbt"
 REPOS="$HOME/.sbt/repositories"

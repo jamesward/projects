@@ -64,13 +64,14 @@ For any repo you put under the factory, whatever its build tool, run `~/projects
 One reusable environment for all managed repos (claude.ai/code → environment selector → `JDK25` → settings):
 
 - **Network access:** Full. Routines run builds and tests that reach Maven Central and its mirror, javadocs.dev, Docker registries and live services (for example `login.jamesward.dev` and `cimd.now` for zio-http-mcp), so an allowlist would keep breaking runs. The tradeoff is that code a routine runs, including dependencies and tests, can reach any host.
-- **Setup script:** paste the contents of [`jdk25-setup.sh`](jdk25-setup.sh) (in this directory) into the environment's Setup script field, e.g. `wl-copy < ~/projects/projects/jdk25-setup.sh`. It does three things:
+- **Setup script:** paste the contents of [`jdk25-setup.sh`](jdk25-setup.sh) (in this directory) into the environment's Setup script field, e.g. `wl-copy < ~/projects/projects/jdk25-setup.sh`. It:
   - Installs Java 25, the default Java for every managed repo. The base image only has OpenJDK 21.
   - Installs `shellcheck` (the Heroku buildpack routines validate with it).
+  - Installs the `pkl` CLI (the Java build, `org.pkl-lang:pkl-cli` `-all.jar` from the mirror, wrapped as `/usr/local/bin/pkl`). Repos whose workflows are written in Pkl (pklgha, cfn-pkl-extras, easyracer) regenerate their YAML with it; see zen-of-projects "Workflows written in Pkl". Without it, pklgha#16 went out without its regenerated `release.yaml` (2026-10-28).
   - Applies the resolver setup from zen-of-projects "Resolvers". The sbt launcher and builds then download from the Google mirror and fall back to Maven Central.
   - Pre-downloads sbt into the environment cache.
 
-  Re-paste it after every change here (last: shellcheck, 2026-10-23).
+  Re-paste it after every change here (last: Pkl CLI, 2026-10-30).
 
   Every command in it is on a single line, with no indentation or backslash continuations. A pasted continuation once merged lines and corrupted `~/.sbt/repositories` (`duplicate label 'local'`). The script fails if that file doesn't come out as exactly 4 lines. Edit the file, not the environment, then re-paste it.
 
