@@ -68,10 +68,11 @@ One reusable environment for all managed repos (claude.ai/code → environment s
   - Installs Java 25, the default Java for every managed repo. The base image only has OpenJDK 21.
   - Installs `shellcheck` (the Heroku buildpack routines validate with it).
   - Installs the `pkl` CLI (the Java build, `org.pkl-lang:pkl-cli` `-all.jar` from the mirror, wrapped as `/usr/local/bin/pkl`). Repos whose workflows are written in Pkl (pklgha, cfn-pkl-extras, easyracer) regenerate their YAML with it; see zen-of-projects "Workflows written in Pkl". Without it, pklgha#16 went out without its regenerated `release.yaml` (2026-10-28).
+  - Links the image's Playwright Chromium (`/opt/pw-browsers/chromium-*/…/chrome`) as `/usr/local/bin/chromium`. Browser tests use it instead of downloading Chrome: kyo-browser's `chrome-headless-shell` download wouldn't extract in cloud sessions, so json-paste's run stopped and lost its bumps (skills#14, 2026-10-29). See zen-of-projects "Browser tests".
   - Applies the resolver setup from zen-of-projects "Resolvers". The sbt launcher and builds then download from the Google mirror and fall back to Maven Central.
   - Pre-downloads sbt into the environment cache.
 
-  Re-paste it after every change here (last: Pkl CLI, 2026-10-30).
+  Re-paste it after every change here (last: Pkl CLI and Chromium, 2026-10-30).
 
   Every command in it is on a single line, with no indentation or backslash continuations. A pasted continuation once merged lines and corrupted `~/.sbt/repositories` (`duplicate label 'local'`). The script fails if that file doesn't come out as exactly 4 lines. Edit the file, not the environment, then re-paste it.
 

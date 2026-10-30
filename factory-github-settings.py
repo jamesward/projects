@@ -11,6 +11,8 @@ Settings:
   - You (the gh user) watch the repo with "All activity" (GitHub's default is "Participating").
   - Wiki is off. If the wiki has pages, it's reported and left on unless --force-wiki is given.
   - Projects are off.
+  - Head branches are deleted when a PR merges. The routines merge through the REST API, which keeps
+    the branch, and a leftover `claude/maintenance` made the next run's push fail as non-fast-forward.
   - Dependabot alerts (vulnerability alerts) are on, and Dependabot security update PRs are off: the
     maintenance routine handles open alerts in its rolling PR (zen-of-projects), within each
     project's documented exceptions (for example a Java 8 target).
@@ -84,6 +86,8 @@ def main():
                 todo.append(("wiki", "turn wiki off"))
         if info.get("has_projects"):
             todo.append(("projects", "turn projects off"))
+        if admin and not info.get("delete_branch_on_merge"):
+            todo.append(("delete_branch", "delete head branches on merge"))
 
         if admin:
             alerts = gh(f"repos/{repo}/vulnerability-alerts", check=False).returncode == 0  # 204 on, 404 off
@@ -111,6 +115,8 @@ def main():
                     gh("-X", "PATCH", f"repos/{repo}", "-F", "has_wiki=false", "--silent")
                 elif kind == "projects":
                     gh("-X", "PATCH", f"repos/{repo}", "-F", "has_projects=false", "--silent")
+                elif kind == "delete_branch":
+                    gh("-X", "PATCH", f"repos/{repo}", "-F", "delete_branch_on_merge=true", "--silent")
                 elif kind == "alerts":
                     gh("-X", "PUT", f"repos/{repo}/vulnerability-alerts", "--silent")
                 elif kind == "fixes":

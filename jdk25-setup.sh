@@ -14,6 +14,10 @@ PKL_VERSION=0.32.2
 PKL_PATH="org/pkl-lang/pkl-cli/$PKL_VERSION/pkl-cli-$PKL_VERSION-all.jar"
 mkdir -p /opt/pkl && { curl -fsSL -o /opt/pkl/pkl.jar "https://maven-central.storage-download.googleapis.com/maven2/$PKL_PATH" || curl -fsSL -o /opt/pkl/pkl.jar "https://repo1.maven.org/maven2/$PKL_PATH"; } && printf '%s\n' '#!/bin/sh' 'exec java --enable-native-access=ALL-UNNAMED -jar /opt/pkl/pkl.jar "$@"' > /usr/local/bin/pkl && chmod +x /usr/local/bin/pkl && pkl --version || echo "Pkl CLI install failed (non-fatal)"
 
+# --- Chromium on PATH: browser tests (e.g. kyo-browser in json-paste) use a system Chrome when one is on PATH; the image's Playwright Chromium is in a versioned dir ---
+PW_CHROME="$(find /opt/pw-browsers -path '*chromium-*' -type f -name chrome -perm -u+x 2>/dev/null | sort -V | tail -1)"
+if [ -n "$PW_CHROME" ]; then ln -sf "$PW_CHROME" /usr/local/bin/chromium && echo "chromium -> $PW_CHROME"; else echo "WARNING: no Playwright Chromium under /opt/pw-browsers; browser tests will try to download Chrome"; fi
+
 # --- sbt: prefer the Google Maven Central mirror, fall back to Maven Central ---
 mkdir -p "$HOME/.sbt" "$HOME/.config/sbt"
 REPOS="$HOME/.sbt/repositories"
