@@ -63,6 +63,11 @@ CHECK_WAIT_SECONDS = int(os.environ.get("FACTORY_SYNC_CHECK_WAIT", "1200"))
 # Site repos with their own MAINTENANCE.md (not the Skill's bootstrap) and no MCP servers.
 CUSTOM_MAINTENANCE = {"jamesward/ai4jvm", "MindviewLLC/podcast"}
 # Repos that deliberately don't depend on com.jamesward:skills (see their AGENTS.md).
+# Libraries released by hand whose dependents adopt changes only from a release: the digest lists
+# changes under these paths since the newest tag with this prefix (pklgha's action defaults reach
+# cfn-pkl-extras and easyracer only through a pklgha release).
+MANUAL_RELEASES = {"jamesward/pklgha": ("pklgha@", ("src/",))}
+
 NO_SKILLS_DEP = {"skillsjars/skillsjars-gradle-plugin", "skillsjars/skillsjars-maven-plugin",
                  "skillsjars/skillsjars-example-spring-ai"}
 
@@ -349,6 +354,27 @@ def pr_conflicts(repo, number):
     return False  # unknown: don't claim a conflict
 
 
+def unreleased(repo, prefix, paths):
+    """A digest item when the default branch has commits touching `paths` since the newest
+    `prefix` tag, or None."""
+    def key(name):
+        return [int(x) if x.isdigit() else x for x in re.split(r"[.-]", name[len(prefix):])]
+    tags = [t["name"] for t in gh(f"repos/{repo}/tags?per_page=100") if t["name"].startswith(prefix)]
+    if not tags:
+        return None
+    tag = max(tags, key=key)
+    default = gh(f"repos/{repo}")["default_branch"]
+    cmp = gh(f"repos/{repo}/compare/{tag}...{default}")
+    files = [f["filename"] for f in cmp.get("files", []) if f["filename"].startswith(paths)]
+    if not files:
+        return None
+    first = cmp["commits"][0]  # oldest commit since the tag
+    created = time.mktime(time.strptime(first["commit"]["committer"]["date"], "%Y-%m-%dT%H:%M:%SZ")) - time.timezone
+    i = {"number": "", "html_url": f"https://github.com/{repo}/compare/{tag}...{default}",
+         "title": f"{len(files)} file(s) under {', '.join(paths)} changed since {tag}; release by hand so dependents can adopt them"}
+    return (created, repo, i, ["unreleased"], [])
+
+
 def digest(repos):
     """Open PRs and issues that need the owner, oldest first: labeled with a DIGEST_LABELS label,
     or titled "Factory improvement:" (routines don't always manage to add the label). PRs that
@@ -373,15 +399,24 @@ def digest(repos):
                 notes.append("conflicts with the base branch: needs a rebase")
             created = time.mktime(time.strptime(i["created_at"], "%Y-%m-%dT%H:%M:%SZ")) - time.timezone
             items.append((created, repo, i, hit, notes))
+    for repo, (prefix, paths) in MANUAL_RELEASES.items():
+        try:
+            item = unreleased(repo, prefix, paths)
+        except Exception as e:
+            failed.append(f"{repo} releases: {str(e).splitlines()[-1][:120]}")
+            continue
+        if item:
+            items.append(item)
     items.sort(key=lambda t: t[0])
     print(f"\n## Needs you ({len(items)} open)")
     if not items:
         print("Nothing open is labeled needs-human or factory-improvement, or titled \"Factory improvement:\".")
     for created, repo, i, hit, notes in items:
-        kind = "PR" if "pull_request" in i else "issue"
+        kind = "PR" if "pull_request" in i else ("release" if hit == ["unreleased"] else "issue")
         days = int((now - created) // 86400)
         extra = "".join(f"; **{n}**" for n in notes)
-        print(f"- [{repo}#{i['number']}]({i['html_url']}) {kind}, {', '.join(hit)}, {days}d{extra}: {i['title']}")
+        ref = f"{repo}#{i['number']}" if i["number"] != "" else f"{repo} release"
+        print(f"- [{ref}]({i['html_url']}) {kind}, {', '.join(hit)}, {days}d{extra}: {i['title']}")
     for f in failed:
         print(f"- (couldn't read {f})")
 
