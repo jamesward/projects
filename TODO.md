@@ -72,6 +72,31 @@ Heroku can't call `/fire` directly: it can't send the `anthropic-beta`/`anthropi
 - Debounce and rate limits: routine runs count against the subscription (100 scheduled runs/hour; check API-trigger limits).
 - Pricing: threshold alerts need professional dynos; log volume for a drain.
 
+## Hill climbing and open-ended tasks (later)
+
+Goal: start open-ended work on one project (improve a metric, explore a change) on demand, without it draining the subscription quota that interactive use shares.
+
+### What exists (checked 2026-10-30)
+
+- Starting runs: a routine's schedule, `RemoteTrigger` `run` (used to re-run routines on 2026-10-30), the `/fire` API with a text payload (see the ops routine section), or an interactive `claude --cloud` session.
+- Hard limits: the number of runs started, the routine's model (Sonnet is the default; Opus uses much more quota), and `claude -p --max-budget-usd` (print mode only; probably only meaningful with an API key, untested with subscription login). An API key with a Console spend limit gives a hard dollar cap, billed separately.
+- No per-run token or dollar cap for routines, and no `--max-turns` in the CLI. Inside a run, only the prompt limits it, which is soft. Routines share the 5-hour and weekly pool with interactive Claude Code and claude.ai, so a runaway climb can lock out your own work.
+
+### Sketch
+
+1. **Goal file** `.factory/goals/<slug>.md`, owner-written on the default branch (not issue text): objective, a metric command that prints a number (without one the run writes a proposal PR instead of iterating), constraints (validation still passes), budget (iterations per run, max runs, stop rule such as no gain in 2 iterations or a target value), and a log the agent appends to (attempt, metric, kept or reverted). Each run starts from the log, not from earlier context.
+2. **A "climb" routine per repo**, separate from maintenance and with no schedule, created by `factory-routines-sync.py`. A zen-of-projects "Hill climb" section: read goal and log, make one change at a time, measure it, keep or revert it, commit the best state to a `claude/climb-<slug>` PR labeled `needs-human`, stop at the iteration cap, never schedule itself.
+3. **`factory-climb.py <repo> <slug>`** checks the goal's remaining runs, fires the routine, and decrements the count. At 0 it refuses to fire.
+4. **Token limits:** Sonnet unless the goal allows Opus; short runs; fire when you aren't using Claude; for a hard dollar cap run locally with `claude -p --max-budget-usd N` and a spend-limited API key.
+
+### Open questions
+
+- Quota: the subscription with run caps, or a separate API key with a spend limit?
+- Starting runs: only by hand with `factory-climb.py`, or also on a schedule until the run count reaches 0?
+- Goal source: the goal file, or a `hill-climb` issue (easy from a phone, but safe only if the routine checks that the owner wrote it)?
+- Which project to try it on first? Pick one with a fast, objective metric.
+- Check whether one-off routine runs really are exempt from the daily routine cap (one third-party guide says so during the research preview).
+
 ## Open work
 
 - **Re-runs on skills 0.0.15 (2026-10-15):** the 429 fix holds for sbt (sbt-mcp, sbt-sass, skillsjars-sbt-plugin: no 429s). Gradle repos stopped on a 429 for `skills-0.0.15.pom` because the Google mirror didn't have a 1-hour-old release yet (404), so Gradle fell back to Central; the Skill now treats that like "Not found". Step 8 still filed nothing in 3 runs that had findings: the bootstrap now requires a link per finding before merging (zen-of-projects main, after 0.0.15). Re-check next week.
