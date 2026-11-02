@@ -29,6 +29,15 @@ ENVIRONMENT_ID = "env_0159utCSbffzUfWZZbAesmJ5"  # JDK25
 PROMPT = ("Follow .factory/MAINTENANCE.md in this repository. "
           "If it doesn't exist yet, follow .factory/DAILY.md instead.")
 NOTIFICATIONS = {"email": True, "push": False, "slack": False}  # email only
+# Auto mode's classifier trusts only the routine's own repo by default, so step 8's push of a
+# "Factory improvement:" branch to jamesward/skills or jamesward/projects was denied as
+# "Create Public Surface" (pushes to third-party repos). Naming the owners' accounts as trusted
+# source control fixes that. Set through session_request.config (job_config.ccr.session_context
+# drops it silently), with "$defaults" so the built-in entries stay.
+AUTO_MODE_ENVIRONMENT = ["$defaults", (
+    "Source control: github.com/jamesward, github.com/webjars, github.com/skillsjars, "
+    "github.com/EffectOrientedProgramming and github.com/MindviewLLC, and every repository under "
+    "them, belong to the owner who runs this routine; they are trusted, not external.")]
 DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 CRON_DOW = {"Sun": 0, "Mon": 1, "Tue": 2, "Wed": 3, "Thu": 4, "Fri": 5, "Sat": 6}
 
@@ -157,7 +166,8 @@ def summarize(r):
     prompt = events[0].get("data", {}).get("message", {}).get("content", "")
     return {"id": r["id"], "name": r["name"], "cron": r.get("cron_expression") or "", "enabled": r["enabled"],
             "env": ccr.get("environment_id"), "repos": repos, "connectors": len(r.get("mcp_connections") or []),
-            "prompt": prompt, "notifications": (r.get("notifications") or {}).get("channel")}
+            "prompt": prompt, "notifications": (r.get("notifications") or {}).get("channel"),
+            "auto_mode_environment": ((r.get("session_request") or {}).get("config") or {}).get("auto_mode_environment") or []}
 
 
 def ready(repo):
@@ -204,6 +214,7 @@ def main():
         if h["connectors"]: diffs.append(f"remove {h['connectors']} connector(s)")
         if not h["enabled"]: diffs.append("enable")
         if h["notifications"] != NOTIFICATIONS: diffs.append("notifications -> email only")
+        if h["auto_mode_environment"] != AUTO_MODE_ENVIRONMENT: diffs.append("auto mode environment -> the owners' trusted source control")
         if diffs:
             print(f"~  {repo} ({h['id']}): " + "; ".join(diffs))
             actions.append(("update", repo, h, target, when))
@@ -227,7 +238,10 @@ def main():
                   f"- Environment: environment_id {t['env']} (JDK25)\n"
                   "- Enabled: true\n- Connectors / MCP connections: none (remove any attached, and verify mcp_connections is empty)\n"
                   "- Notifications: email only, i.e. body field notifications = "
-                  '{"channel": {"email": true, "push": false, "slack": false}}\n')
+                  '{"channel": {"email": true, "push": false, "slack": false}}\n'
+                  "- Auto mode environment: set session_request.config.auto_mode_environment (not "
+                  "job_config.ccr.session_context, which drops it) to exactly this JSON array, and keep every other "
+                  f"session_request.config field as it is: {json.dumps(AUTO_MODE_ENVIRONMENT)}\n")
         if kind == "create":
             p = ("/schedule Create a new scheduled routine with exactly these settings and do not ask follow-up "
                  f"questions. Do not run it.\n{common}Afterwards, fetch it and report its id, name, cron and environment_id.")
