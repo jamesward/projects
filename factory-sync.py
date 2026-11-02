@@ -3,6 +3,8 @@
 
     ./factory-sync.py                  # report drift only (dry run)
     ./factory-sync.py --apply          # open/update a 'Factory sync:' PR per drifted repo, merge after CI
+    ./factory-sync.py --apply --no-merge  # open/update the PRs only (the daily routine): each repo's next
+                                          # maintenance run merges its PR once CI passes, or run --apply
     ./factory-sync.py --list           # print the managed repos (for add_repo in a cloud session)
     ./factory-sync.py owner/repo ...   # limit to these repos
     ./factory-sync.py --digest         # only list open items that need the owner (see below)
@@ -27,7 +29,9 @@ compared with the canonical factory files:
 
 AGENTS.md and everything else are left to each repo's maintenance routine. --apply commits to the
 bot-owned branch claude/factory-sync, opens or updates one PR titled 'Factory sync: ...', and
-squash-merges it once its CI checks have run and passed. A PR with failing or no checks gets the
+squash-merges it once its CI checks have run and passed (not with --no-merge: the daily routine
+uses it because auto mode denies its merges, so each repo's maintenance run merges the PR after CI,
+or the owner runs --apply locally, which also merges sync PRs that are already open). A PR with failing or no checks gets the
 needs-human label and a comment. A PR whose checks are still running is left for the next run.
 It never triggers a routine.
 
@@ -379,7 +383,7 @@ def digest(repos):
     """Open PRs and issues that need the owner, oldest first: labeled with a DIGEST_LABELS label,
     or titled "Factory improvement:" (routines don't always manage to add the label). PRs that
     conflict with their base branch are marked, since they need a rebase before they can merge."""
-    items, failed = [], []
+    items, failed, sync_prs = [], [], []
     now = time.time()
     for repo in sorted(set(repos) | set(FACTORY_REPOS)):
         try:
@@ -388,6 +392,8 @@ def digest(repos):
             failed.append(f"{repo}: {str(e).splitlines()[-1][:120]}")
             continue
         for i in page:
+            if "pull_request" in i and i["title"].startswith("Factory sync:"):
+                sync_prs.append((repo, i))
             labels = [l["name"] for l in i.get("labels", [])]
             hit = [l for l in labels if l in DIGEST_LABELS]
             if i["title"].startswith(FACTORY_IMPROVEMENT_TITLE) and "factory-improvement" not in hit:
@@ -419,6 +425,10 @@ def digest(repos):
         print(f"- [{ref}]({i['html_url']}) {kind}, {', '.join(hit)}, {days}d{extra}: {i['title']}")
     for f in failed:
         print(f"- (couldn't read {f})")
+    if sync_prs:
+        oldest = min(i["created_at"] for _, i in sync_prs)[:10]
+        print(f"\n{len(sync_prs)} open \"Factory sync:\" PR(s), oldest from {oldest}. Each merges in its repo's next "
+              "maintenance run once CI passes; to merge them now, run `./factory-sync.py --apply` locally.")
 
 
 # ---------- main ----------
@@ -426,6 +436,7 @@ def digest(repos):
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     apply = "--apply" in sys.argv
+    merge = apply and "--no-merge" not in sys.argv
     repos = managed_repos()
     if "--list" in sys.argv:
         print("\n".join(repos + [r for r in FACTORY_REPOS if r not in repos]))
@@ -457,7 +468,7 @@ def main():
             if not changes:
                 print(f"=  {repo} ({kind}): in sync{'; ' + '; '.join(label) if label else ''}"
                       + (f"; open PR #{pr['number']} left for merge check" if pr else ""))
-                if pr and apply:
+                if pr and merge:
                     pending_prs.append((repo, pr["number"]))
                 continue
             drifted += 1
@@ -473,8 +484,9 @@ def main():
             run("git", "push", "-q", "--force", "origin", f"HEAD:refs/heads/{BRANCH}", cwd=d)
             body = (f"Synced from the factory ([jamesward/projects](https://github.com/jamesward/projects)) by "
                     f"`factory-sync.py`. Changes:\n\n{body_lines}\n\n"
-                    "Only factory-owned files and entries change. This PR merges once CI passes; it doesn't run "
-                    "the maintenance routine.")
+                    "Only factory-owned files and entries change; it doesn't run the maintenance routine. It merges "
+                    "once CI passes: in the repo's next maintenance run (see `.factory/MAINTENANCE.md`), or when "
+                    "the owner runs `./factory-sync.py --apply`.")
             if pr:
                 gh(f"repos/{repo}/pulls/{pr['number']}", "PATCH", {"title": msg[:72], "body": body})
                 number = pr["number"]
@@ -486,7 +498,9 @@ def main():
         except Exception as e:  # report and continue with the other repos
             print(f"!! {repo}: {e}")
 
-    if apply and pending_prs:
+    if apply and not merge and pending_prs:
+        print(f"\n{len(pending_prs)} PR(s) opened or updated, not merged (--no-merge).")
+    if merge and pending_prs:
         print(f"\nWaiting up to {CHECK_WAIT_SECONDS}s for CI on {len(pending_prs)} PR(s)...")
         started = time.time()
         deadline = started + CHECK_WAIT_SECONDS
