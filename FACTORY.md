@@ -228,7 +228,7 @@ It only reports by default. `--apply` creates or updates routines to match the t
 | `jamesward/zio-git` | Mon | 06:37 | `trig_01PTC5VWi3kxB95f5cSYSjvM` |
 | `jamesward/zio-http-guard` | Tue | 06:37 | `trig_01RfJLrdtmNYHQbWwKbhErow` |
 | `jamesward/zio-http-mcp` | Wed | 06:37 | `trig_01QKdyXLkSSGPRuTKrQPwSkh` |
-| `jamesward/zio-typesafe-ai` | Thu | 06:37 | `trig_01T1YEe5fcQWSVUFDYLhj5R5` |
+| `jamesward/zio-decisions` | Thu | 06:37 | `trig_01R4euodXkJ9ngzqBKomuhy3` |
 | `jamesward/javadoccentral` | Tue | 06:57 | `trig_015gFmnB5JMkaq6p3BGx7LwM` |
 | `jamesward/zio-mavencentral` | Wed | 06:57 | `trig_01R8SF1ciT7FGtmFsNi1gRJV` |
 | `jamesward/hello-spring-ai-bedrock` | Fri | 06:57 | `trig_01XQvq7iqTV3hXCod3eXWHij` |
@@ -585,12 +585,12 @@ Maven Central: com.jamesward:zio-bedrock_3
 Source: https://github.com/jamesward/hello-zio-bedrock
 
 
-### zio-typesafe-ai
+### zio-decisions
 
-ZIO TypeSafe AI Library
+ZIO decision-model library (provider-neutral; TypeSafe AI's Jev and OpenAI's Decisions API). Successor to zio-typesafe-ai.
 
-Source: https://github.com/jamesward/zio-typesafe-ai
-Maven Central: com.jamesward:zio-typesafe-ai_3
+Source: https://github.com/jamesward/zio-decisions
+Maven Central: com.jamesward:zio-decisions_3
 
 #### hello-zio-typesafe-ai
 
@@ -682,6 +682,14 @@ Heroku App: eop-login
 
 Source: https://github.com/EffectOrientedProgramming/mcp
 Heroku App: eop-mcp
+
+
+### zio-typesafe-ai
+
+ZIO TypeSafe AI library, replaced by zio-decisions (2026-11-02; its README says so). Not maintained: no routine (its `zio-typesafe-ai maintenance` routine, `trig_01T1YEe5fcQWSVUFDYLhj5R5`, is disabled), and the factory scripts ignore it. Releases up to 0.1.0 stay on Maven Central.
+
+Source: https://github.com/jamesward/zio-typesafe-ai
+Maven Central: com.jamesward:zio-typesafe-ai_3
 
 
 ### sbt-mcp
