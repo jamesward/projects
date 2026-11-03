@@ -291,6 +291,7 @@ The apps heroku-ops watches. This table is the source of truth: [`factory-heroku
 
 | App | Repo | URL | Probe |
 |---|---|---|---|
+| json-paste | jamesward/json-paste | https://json-paste.herokuapp.com | / |
 
 ### Production infrastructure (Heroku)
 
