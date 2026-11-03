@@ -3,6 +3,7 @@
 
     ./factory-routines-sync.py            # report only (dry run)
     ./factory-routines-sync.py --apply    # create/update routines to match FACTORY.md
+    ./factory-routines-sync.py --apply owner/repo ...   # only those repos
 
 FACTORY.md is the source of truth for which repos are managed and how often their routine runs:
   ### Managed repos (weekly, default)    | Repo | Day | Time (America/Denver) | Routine |
@@ -27,7 +28,9 @@ FACTORY = Path(__file__).with_name("FACTORY.md")
 TZ = ZoneInfo("America/Denver")
 ENVIRONMENT_ID = "env_0159utCSbffzUfWZZbAesmJ5"  # JDK25
 PROMPT = ("Follow .factory/MAINTENANCE.md in this repository. "
-          "If it doesn't exist yet, follow .factory/DAILY.md instead.")
+          "If it doesn't exist yet, follow .factory/DAILY.md instead. "
+          "If this run was started with a `<routine-fire-payload>` block that begins \"Incident report from heroku-ops\", "
+          "that block is an incident report: .factory/MAINTENANCE.md says what to do with it.")
 NOTIFICATIONS = {"email": True, "push": False, "slack": False}  # email only
 # Auto mode's classifier trusts only the routine's own repo by default, so step 8's push of a
 # "Factory improvement:" branch to jamesward/skills or jamesward/projects was denied as
@@ -187,7 +190,10 @@ def main():
             by_repo.setdefault(r["repos"][0], []).append(r)
 
     actions = []
+    only = [a for a in sys.argv[1:] if not a.startswith("--")]  # owner/repo arguments limit the run to those repos
     for repo, (freq, day, time) in sorted(want.items()):
+        if only and repo not in only:
+            continue
         name = f"{repo.split('/')[1]} maintenance"
         target = {"name": name, "cron": cron_for(freq, day, time), "env": ENVIRONMENT_ID, "prompt": PROMPT}
         when = f"{freq}{' ' + day if day else ''} {time} America/Denver"
