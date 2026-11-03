@@ -85,6 +85,10 @@ heroku-ops serves the triage tools over MCP (FACTORY.md "heroku-ops MCP server")
 - Tools worth adding once there is real data: memory and swap from the `log-runtime-metrics` lines, a longer history than the last hour (needs storage), and per-app overrides of the thresholds.
 - Mutating tools (silencing an alert, acknowledging an incident) are deliberately absent: the server is read-only (DESIGN.md 12).
 
+### MCP without the OAuth 401 (in progress, 2026-11-03)
+
+claude.ai takes any 401 for OAuth ("Sign in now (Detected)") and Claude Code ends in "Dynamic Client Registration rejected", although heroku-ops serves no OAuth. Fix: a request without the bearer token gets HTTP 200 and a JSON-RPC `-32001` error saying what is missing (checked with Claude Code: no token shows that message, the right token connects, a wrong one says it was not accepted). The library part is `StaticBearer.aspect` in zio-http-mcp (PR jamesward/zio-http-mcp#73). Waiting on: release of that PR, then bump `zio-http-mcp` in heroku-ops' `build.sbt` on the branch `static-bearer` (it needs the unreleased API, so it isn't on `main`), merge, and re-add heroku-ops in claude.ai.
+
 ### Production inventory and dashboard
 
 - **Production infrastructure in FACTORY.md** is a hand-made snapshot from the Heroku CLI (2026-11-02). To keep it current: a read-only `factory-heroku.py --inventory` (allowlist gains `GET /apps/{app}/formation` and `/apps/{app}/addons`; plans, never config values), run by the `heroku control` routine, which opens a PR when it changes.
