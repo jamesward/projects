@@ -1,9 +1,8 @@
 # James Ward Projects
 
 I maintain numerous libraries, websites, build plugins, code samples, IaC tooling, and Nix Packages.
-Consistency helps reduce the maintenance burden.
 
-This file holds only three things:
+Why the factory is built this way, and the principles every change to it follows, are in [DESIGN.md](DESIGN.md). This file holds only three things:
 1. How to set up the factory (automation) for each type of project.
 2. Shared registries and production identifiers.
 3. The project list.
@@ -29,9 +28,10 @@ Run [`factory-github-settings.py`](factory-github-settings.py), and add `--apply
 - you're watching the repo with **All activity** (GitHub defaults to "Participating and @mentions");
 - **Wikis** are off. A wiki that has pages is reported and left on unless you pass `--force-wiki`;
 - **Projects** are off.
-- **Dependabot alerts** are on and **Dependabot security update PRs** are off. The maintenance routine fixes open alerts in its rolling PR (zen-of-projects step 4), within each project's exceptions. Security update PRs ignored those exceptions: on webjars-locator-core they proposed Spring Boot 3 (Java 17) for a Java 8 library.
+- **Head branches** are deleted when a PR merges.
+- **Dependabot alerts** are on (for you; routines can't read them) and **Dependabot security update PRs** are off (DESIGN.md 1 and 3).
 
-Archived repos are skipped. Settings on repos you don't administer are only reported.
+Archived repos are skipped. Settings on repos you don't administer are only reported, and settings the token can't read are reported with `?`. The daily factory sync runs the same check and keeps a `needs-human` issue open in this repo while anything differs (see "Findings issues"). It can't fix them, because the Claude GitHub App has only read access to repository administration: run `--apply` locally when that issue appears.
 
 ### Per-repo checklist
 
@@ -63,7 +63,7 @@ For any repo you put under the factory, whatever its build tool, run `~/projects
 
 One reusable environment for all managed repos (claude.ai/code → environment selector → `JDK25` → settings):
 
-- **Network access:** Full. Routines run builds and tests that reach Maven Central and its mirror, javadocs.dev, Docker registries and live services (for example `login.jamesward.dev` and `cimd.now` for zio-http-mcp), so an allowlist would keep breaking runs. The tradeoff is that code a routine runs, including dependencies and tests, can reach any host.
+- **Network access:** Full (DESIGN.md, "Trade-offs we accepted"). Builds and tests reach Maven Central and its mirror, javadocs.dev, Docker registries and live services (for example `login.jamesward.dev` and `cimd.now` for zio-http-mcp).
 - **Setup script:** paste the contents of [`jdk25-setup.sh`](jdk25-setup.sh) (in this directory) into the environment's Setup script field, e.g. `wl-copy < ~/projects/projects/jdk25-setup.sh`. It:
   - Installs Java 25, the default Java for every managed repo. The base image only has OpenJDK 21.
   - Installs `shellcheck` (the Heroku buildpack routines validate with it).
@@ -168,7 +168,14 @@ The guidance is the "Website Projects" section of zen-of-projects. Static sites 
 
 ## Factory sync
 
-**Needs-you digest.** The factory opens PRs and issues as your own GitHub user, and GitHub never notifies you about your own activity. So every `factory-sync.py` run ends with a "Needs you" list: open PRs and issues labeled `needs-human` or `factory-improvement`, or titled `Factory improvement:` (routines often can't add the label), in the managed repos, `jamesward/projects` and `jamesward/skills`, oldest first, with links and age. It also lists libraries in `MANUAL_RELEASES` (pklgha) whose default branch changed under their source paths since the last release tag: their dependents only adopt a release, so the chain waits on you there. PRs that conflict with their base branch are marked "needs a rebase": nothing rebases them automatically, and since most edit `SKILL.md`, a rebase usually needs a decision about whether the change still applies. The daily `factory sync` routine ends its reply with that list, and the routine's result email delivers it. `./factory-sync.py --digest` prints only the list. For an on-demand view: [GitHub search](https://github.com/search?q=is%3Aopen+label%3Aneeds-human%2Cfactory-improvement+archived%3Afalse+user%3Ajamesward+user%3Awebjars+user%3Askillsjars+user%3AEffectOrientedProgramming+user%3AMindviewLLC&type=issues).
+**Needs-you digest** (DESIGN.md 5). Every `factory-sync.py` run ends with a "Needs you" list: open PRs and issues labeled `needs-human` or `factory-improvement`, or titled `Factory improvement:` (routines often can't add the label), in the managed repos, `jamesward/projects` and `jamesward/skills`, oldest first, with links and age. It also lists libraries in `MANUAL_RELEASES` (pklgha) whose default branch changed under their source paths since the last release tag: their dependents only adopt a release, so the chain waits on you there. PRs that conflict with their base branch are marked "needs a rebase": nothing rebases them automatically, and since most edit `SKILL.md`, a rebase usually needs a decision about whether the change still applies. The daily `factory sync` routine ends its reply with that list, and the routine's result email delivers it. `./factory-sync.py --digest` prints only the list. For an on-demand view: [GitHub search](https://github.com/search?q=is%3Aopen+label%3Aneeds-human%2Cfactory-improvement+archived%3Afalse+user%3Ajamesward+user%3Awebjars+user%3Askillsjars+user%3AEffectOrientedProgramming+user%3AMindviewLLC&type=issues).
+
+**Findings issues.** Every full `factory-sync.py --apply` run (all managed repos) also checks for things that failed or aren't as the factory expects, and keeps one issue per finding in `jamesward/projects`, labeled `needs-human`, so the digest and the routine's email list it. A hidden `<!-- factory-finding: KEY -->` marker in the body identifies each one: the run opens it, updates it when the details change, and closes it with a comment once the finding is gone. A finding the run couldn't check (a setting the cloud token can't read) leaves its issue open. Findings:
+- `settings`: GitHub settings that differ, including Dependabot alerts turned off (`factory-github-settings.py`'s check; fix with its `--apply` locally).
+- `sync-failed:<repo>`: the sync failed on a repo (`!!`), with the error.
+- `stale-sync-prs`: `Factory sync:` PRs open more than 7 days, so the repos' maintenance runs aren't merging them.
+
+Without `--apply` the script prints what it would open, update or close. It only checks what a script can decide; findings that need judgment are for the evaluator in TODO.md.
 
 [`factory-sync.py`](factory-sync.py) keeps the factory-owned files in every managed repo (the repos in "Managed Repos & Schedules") equal to the factory's current versions, without running any repo's routine:
 - `.factory/MAINTENANCE.md`: the bootstrap from the published zen-of-projects Skill (jamesward/skills `main`), or the no-Skills-dependency variant. ai4jvm and podcast keep their own.
@@ -181,12 +188,12 @@ The guidance is the "Website Projects" section of zen-of-projects. Static sites 
 The routine `factory sync` (`trig_01NUJivtCGbUbQCyZjZAju5w`, daily 05:07 America/Denver, before the maintenance routines) runs it. It isn't in the schedule tables, so `factory-routines-sync.py` lists it as unmanaged. In that routine:
 
 1. Run `./factory-sync.py --list`. For each repo, call the `add_repo` tool (load it with ToolSearch) with `access: "push"`, one call at a time, and don't clone them; the script clones what it needs.
-2. Run `python3 -u ./factory-sync.py --apply --no-merge` with a 30-minute command timeout, as that exact command with nothing piped after it (its output is short). It opens or updates the `Factory sync:` PRs and doesn't merge them.
-3. Reply with the script's summary line, every line starting with `~`, `!!` or `   ` (PR numbers and merge results), and then its whole "Needs you" section, verbatim, as the end of the reply. If a repo failed (`!!`) or a PR got `needs-human`, say why. If a command is denied, quote the denial and stop. Don't send push notifications; the routine emails its result. Change nothing else: don't edit files in this repo or in the managed repos by hand, and don't run any repo's maintenance routine.
+2. Run `python3 -u ./factory-sync.py --apply --no-merge` with a 30-minute command timeout, as that exact command with nothing piped after it (its output is short). It opens or updates the `Factory sync:` PRs and doesn't merge them, then opens, updates or closes the findings issues.
+3. Reply with the script's summary line, every line starting with `~`, `!!` or `   ` (PR numbers and merge results), its "## Findings" section, and then its whole "Needs you" section, verbatim, as the end of the reply. If a repo failed (`!!`) or a PR got `needs-human`, say why. If a command is denied, quote the denial and stop. Don't send push notifications; the routine emails its result. Change nothing else: don't edit files in this repo or in the managed repos by hand, and don't run any repo's maintenance routine.
 
 **Who merges sync PRs.** Since 2026-11-02 the routine doesn't merge (see below). Each repo's next maintenance run merges its open `Factory sync:` PR once CI passes, before its own work (the `.factory/MAINTENANCE.md` bootstrap says so; ai4jvm and podcast keep their own `MAINTENANCE.md`, so merge theirs by hand). To merge them sooner, run `./factory-sync.py --apply` locally: it also merges sync PRs that are already open, after CI. The digest ends with the number of open sync PRs. The first PRs that carry the new bootstrap still need a local `--apply`, since the repos' current `MAINTENANCE.md` doesn't have the rule yet.
 
-**Classifier denials.** The auto mode classifier has denied `python3 -u ./factory-sync.py --apply` on several days ("Permission Grant", "Modify Shared Resources", "Merge Without Review"). From 2026-10-25 it has denied it in every run ("Merge Without Review"), with the same prompt and routine config that worked through 10-24 and no change in this repo, so no `Factory sync:` PR has been opened since 10-24. The routine still reports `SUCCEEDED`, because the session exits cleanly; the denial is only in the transcript and the emailed reply. A `.claude/settings.json` allowlist doesn't help (the classifier doesn't read `autoMode` from project settings), and an authorization sentence in the prompt only helped some days. The routine's own session config now carries it: `auto_mode_environment` names the five owners' GitHub orgs as the owner's trusted source control, and `auto_mode_allow` describes and allows the sync's push, PR and merge-after-CI. Both include `$defaults`. Set them through the routine's `session_request.config` (writing them into `job_config.ccr.session_context` is silently dropped). The prompt also runs `--digest` first, so the digest is emailed even if `--apply` is denied.
+**Classifier denials.** The auto mode classifier has denied `--apply` ("Permission Grant", "Modify Shared Resources", and from 2026-10-25 "Merge Without Review" in every run, hence `--no-merge`). A denied run still reports `SUCCEEDED`; the denial is only in the transcript and the emailed reply. A `.claude/settings.json` allowlist doesn't help (the classifier doesn't read `autoMode` from project settings), and an authorization sentence in the prompt only helped some days. The routine's own session config carries it: `auto_mode_environment` names the five owners' GitHub orgs as the owner's trusted source control, and `auto_mode_allow` describes and allows the sync's push, PR and merge-after-CI, and the findings issues in this repo. Both include `$defaults`. Set them through the routine's `session_request.config` (writing them into `job_config.ccr.session_context` is silently dropped). The prompt also runs `--digest` first, so the digest is emailed even if `--apply` is denied.
 
 Run it locally the same way after editing the factory (`./factory-sync.py`, then `--apply`). Verified 2026-10-05: a cloud session `add_repo`'d all 44 repos without prompts and the report took 88s; locally `--apply` opened, CI-checked and merged toolbook PR #99. In cloud sessions the script reads the Skill from a clone of jamesward/skills, because the git proxy refuses start.jamesward.com's redirect to the raw file (HTTP 403).
 

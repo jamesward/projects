@@ -35,6 +35,12 @@ or the owner runs --apply locally, which also merges sync PRs that are already o
 needs-human label and a comment. A PR whose checks are still running is left for the next run.
 It never triggers a routine.
 
+A full run (no owner/repo arguments) then checks findings: GitHub settings that differ
+(factory-github-settings.py's check, which includes Dependabot alerts being on), repos the sync
+failed on, and "Factory sync:" PRs open more than 7 days. With --apply it keeps one needs-human issue per finding in
+jamesward/projects (opened, updated, and closed once the finding is gone; left open when the run
+couldn't check it); without --apply it prints what it would do.
+
 Every run ends with a "Needs you" digest: the open PRs and issues labeled needs-human or
 factory-improvement, or titled "Factory improvement:", in the managed repos plus jamesward/projects
 and jamesward/skills; PRs that conflict with their base are marked as needing a rebase. The factory
@@ -431,6 +437,127 @@ def digest(repos):
               "maintenance run once CI passes; to merge them now, run `./factory-sync.py --apply` locally.")
 
 
+# ---------- findings: needs-human issues in the factory repo ----------
+
+# Things that failed or aren't as the factory expects, found by a run. Each finding is one open
+# issue in FINDINGS_REPO labeled needs-human (so the digest and the routine's email list it),
+# identified by a hidden marker in its body. A run opens or updates the issue while the finding
+# holds and closes it once the run could check and the finding is gone. Nothing is closed for a
+# check the run couldn't make (cloud sessions can't read some settings).
+FINDINGS_REPO = "jamesward/projects"
+MARKER = "<!-- factory-finding: %s -->"
+STALE_SYNC_DAYS = 7
+
+
+def load_settings():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("factory_github_settings", HERE / "factory-github-settings.py")
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
+
+
+def settings_finding():
+    """(finding or None, complete): GitHub settings that differ, from factory-github-settings.py."""
+    gs = load_settings()
+    lines, unknown = [], []
+    for repo in gs.repos():
+        try:
+            c = gs.check(repo, force_wiki=False)
+        except Exception as e:
+            unknown.append(f"{repo}: {str(e).splitlines()[-1][:120]}")
+            continue
+        items = [d for _, d in c["todo"]] + c["problems"]
+        if c["skipped"] and c["skipped"] != "archived":
+            unknown.append(f"{repo}: {c['skipped']}")
+        if c["unknown"]:
+            unknown.append(f"{c['repo']}: couldn't read {', '.join(c['unknown'])}")
+        if items:
+            lines.append(f"- `{c['repo']}`: " + "; ".join(items))
+    for u in unknown:
+        print(f"?  settings: {u}")
+    if not lines:
+        return None, not unknown
+    body = ("GitHub settings on these repos differ from the factory's (see `factory-github-settings.py`):\n\n"
+            + "\n".join(lines) + "\n\nFix: run `./factory-github-settings.py --apply` locally. Cloud sessions "
+            "reach GitHub through the Claude GitHub App, which can't change repository settings.")
+    return ("settings", f"Factory: GitHub settings differ on {len(lines)} repo(s)", body), not unknown
+
+
+def findings(repos, failures, sync_prs):
+    """(found {key: (title, body)}, checked {keys whose absence this run confirmed})."""
+    found, checked = {}, set()
+
+    def add(f, complete, key):
+        if f:
+            found[f[0]] = f[1:]
+        if complete or f:
+            checked.add(key)
+
+    for repo in repos:
+        key = f"sync-failed:{repo}"
+        checked.add(key)
+        if repo in failures:
+            found[key] = (f"Factory sync failed for {repo}",
+                          f"`factory-sync.py` failed on `{repo}`:\n\n```\n{failures[repo][:3000]}\n```\n\n"
+                          f"Reproduce locally with `./factory-sync.py {repo}`.")
+    now = time.time()
+    stale = []
+    for repo, (number, created) in sorted(sync_prs.items()):
+        days = int((now - time.mktime(time.strptime(created, "%Y-%m-%dT%H:%M:%SZ")) + time.timezone) // 86400)
+        if days > STALE_SYNC_DAYS:
+            stale.append(f"- [{repo}#{number}](https://github.com/{repo}/pull/{number}), {days}d")
+    checked.add("stale-sync-prs")
+    if stale:
+        found["stale-sync-prs"] = (
+            f"Factory: {len(stale)} \"Factory sync:\" PR(s) open more than {STALE_SYNC_DAYS} days",
+            "Each repo's maintenance run should merge its open `Factory sync:` PR once CI passes "
+            "(`.factory/MAINTENANCE.md`), but these are still open:\n\n" + "\n".join(stale) +
+            "\n\nCheck the repo's last run (`./factory-transcript.py <owner/repo> --last`), or merge them "
+            "with `./factory-sync.py --apply` locally.")
+    f, complete = settings_finding()
+    add(f, complete, "settings")
+    return found, checked
+
+
+def sync_issues(found, checked, apply):
+    """Open, update or close the needs-human finding issues in FINDINGS_REPO."""
+    if apply:
+        ensure_label(FINDINGS_REPO, True)
+    existing = {}
+    for i in gh(f"repos/{FINDINGS_REPO}/issues?state=open&labels=needs-human&per_page=100"):
+        m = re.search(r"<!-- factory-finding: (\S+) -->", i.get("body") or "")
+        if m and "pull_request" not in i:
+            existing[m.group(1)] = i
+    verb = (lambda v: v) if apply else (lambda v: f"would {v}")
+    print(f"\n## Findings ({len(found)}; issues in {FINDINGS_REPO}, labeled needs-human)")
+    for key, (title, body) in sorted(found.items()):
+        body = f"{body}\n\nOpened and kept current by the daily factory sync (`factory-sync.py`), which closes " \
+               f"it once the finding is gone.\n\n{MARKER % key}"
+        i = existing.get(key)
+        if i is None:
+            if apply:
+                i = gh(f"repos/{FINDINGS_REPO}/issues", "POST", {"title": title, "body": body, "labels": ["needs-human"]})
+            print(f"+  {verb('open')}: {title}" + (f" ({i['html_url']})" if i else ""))
+        elif i["title"] != title or (i.get("body") or "").replace("\r\n", "\n") != body:
+            if apply:
+                gh(f"repos/{FINDINGS_REPO}/issues/{i['number']}", "PATCH", {"title": title, "body": body})
+            print(f"*  {verb('update')} #{i['number']}: {title} ({i['html_url']})")
+        else:
+            print(f"=  #{i['number']}: {title} ({i['html_url']})")
+    for key, i in sorted(existing.items()):
+        if key in found:
+            continue
+        if key not in checked:
+            print(f"?  #{i['number']}: couldn't check this run, left open: {i['title']}")
+            continue
+        if apply:
+            gh(f"repos/{FINDINGS_REPO}/issues/{i['number']}/comments", "POST",
+               {"body": "The factory sync no longer finds this; closing."})
+            gh(f"repos/{FINDINGS_REPO}/issues/{i['number']}", "PATCH", {"state": "closed", "state_reason": "completed"})
+        print(f"-  {verb('close')} #{i['number']}: {i['title']}")
+
+
 # ---------- main ----------
 
 def main():
@@ -451,6 +578,7 @@ def main():
         repos = args
     boot = bootstrap()
     pending_prs = []
+    failures, sync_prs = {}, {}  # repo -> error; repo -> (open sync PR number, created_at)
     drifted = 0
     work = Path(tempfile.mkdtemp(prefix="factory-sync-"))
     for repo in repos:
@@ -462,6 +590,8 @@ def main():
             default = info["default_branch"]
             d = work / repo.replace("/", "__")
             pr = open_pr(repo)
+            if pr:
+                sync_prs[repo] = (pr["number"], pr["created_at"])
             clone(repo, default, d)
             kind, changes = desired(repo, d, boot)
             label = ensure_label(repo, apply)
@@ -497,6 +627,7 @@ def main():
             pending_prs.append((repo, number))
         except Exception as e:  # report and continue with the other repos
             print(f"!! {repo}: {e}")
+            failures[repo] = str(e)
 
     if apply and not merge and pending_prs:
         print(f"\n{len(pending_prs)} PR(s) opened or updated, not merged (--no-merge).")
@@ -513,6 +644,7 @@ def main():
                     pr = gh(f"repos/{repo}/pulls/{number}")
                     if pr["state"] != "open":
                         print(f"   {repo}#{number}: {pr['state']}")
+                        sync_prs.pop(repo, None)
                         continue
                     if "needs-human" in [l["name"] for l in pr["labels"]]:
                         print(f"   {repo}#{number}: labeled needs-human, left for a maintainer")
@@ -522,6 +654,7 @@ def main():
                         gh(f"repos/{repo}/pulls/{number}/merge", "PUT", {"merge_method": "squash"})
                         gh(f"repos/{repo}/git/refs/heads/{BRANCH}", "DELETE", check=False)
                         print(f"   {repo}#{number}: CI passed, merged")
+                        sync_prs.pop(repo, None)
                     elif state == "none":
                         if time.time() > started + 300:  # give checks 5 minutes to appear
                             needs_human(repo, number, "no CI checks ran on this PR.")
@@ -535,6 +668,7 @@ def main():
                         print(f"   {repo}#{number}: CI {state}, labeled needs-human")
                 except Exception as e:
                     print(f"!! {repo}#{number}: {e}")
+                    failures[repo] = f"merge check of #{number}: {e}"
             waiting = still
             if waiting and time.time() > deadline:
                 for repo, number in waiting:
@@ -544,6 +678,13 @@ def main():
                 time.sleep(30)
 
     print(f"\n{drifted} of {len(repos)} repo(s) drifted." + ("" if apply or not drifted else " Run with --apply to fix."))
+    if args:
+        print("\n(Findings issues are only synced when every managed repo is checked.)")
+    else:
+        try:
+            sync_issues(*findings(repos, failures, sync_prs), apply)
+        except Exception as e:
+            print(f"!! findings: {e}")
     digest(repos)
     run("rm", "-rf", str(work), check=False)
 

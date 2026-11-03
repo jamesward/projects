@@ -6,7 +6,7 @@ Goal: every routine run is evaluated afterwards, and what it reveals improves th
 
 ### What to look for in a run
 
-- **Tool friction:** fallbacks from MCP to the CLI, retries, timeouts, "no sbt channel", stale indexes, output a tool didn't return. Example (webjars, 2026-10-04): `sbt-task` returned only `Failed tests: <Spec>` because test frameworks print results to the test JVM's stdout, which never reaches the log sbt-mcp captures. `last` and `Test / fork := false` don't help, and a `set` restarts the MCP server mid-request.
+- **Tool friction:** fallbacks from MCP to the CLI, retries, timeouts, "no sbt channel", stale indexes, output a tool didn't return. Example (webjars, 2026-10-04, sbt-mcp before sbta replaced it): `sbt-task` returned only `Failed tests: <Spec>` because test frameworks print results to the test JVM's stdout, which never reaches the log sbt-mcp captures. `last` and `Test / fork := false` don't help, and a `set` restarts the MCP server mid-request.
 - **Instruction gaps:** the agent guessed, asked, or did something the Skill doesn't cover (Docker not started for Testcontainers, a `testFull` run that outlived an MCP timeout, a release not on a mirror yet).
 - **Policy outcomes:** `needs-human` PRs and why; merges that later broke CI or production; reverts.
 - **Cost and time:** run duration, turns, the steps that dominated them, wasted work (for example the same failing download retried).
@@ -17,7 +17,7 @@ Goal: every routine run is evaluated afterwards, and what it reveals improves th
 1. **Run reports as data.** Make the end-of-run report in the Skill's "Maintenance Routine" structured, as a fixed section in the PR description or a comment: tools used, fallbacks with reasons, errors quoted, durations, and an "improvement suggestions" list. The agent already writes most of this; a fixed shape makes it parseable.
 2. **Agent self-critique step.** (Started: zen-of-projects step 8.) Add a final routine step: "List what slowed you down or made you fall back, and which file (repo `AGENTS.md`, zen-of-projects, FACTORY.md, a tool) should change so the next run avoids it." Cheap, and it gets the perspective of the agent that hit the problem (the webjars transcript is exactly this).
 3. **Evaluator routine.** A separate scheduled routine (weekly, after the maintenance runs), on the factory repo (`jamesward/projects`) plus the tool repos. It:
-   - lists the week's runs (`RemoteTrigger list_runs` for each id in the FACTORY.md tables) and reads their logs (`get_run_log`) and the resulting PRs and comments;
+   - lists the week's runs and reads their transcripts (`factory-transcript.py`, which pages through `list_runs` and `get_run_log` per routine id) and the resulting PRs and comments;
    - clusters findings across repos and dedupes them against the open issues;
    - opens or updates one issue per finding in the repo that should change, labeled `factory-improvement`, with evidence (run links, quoted errors) and a proposed fix;
    - never changes things itself at first: a human triages.
@@ -27,15 +27,15 @@ Goal: every routine run is evaluated afterwards, and what it reveals improves th
 
 ### Access to the factory and Skills repos
 
-Done (2026-10-04): zen-of-projects Maintenance Routine step 8 has each run review itself and open `Factory improvement:` PRs (label `factory-improvement`, never merged) in `jamesward/skills` or `jamesward/projects`, attaching them with `add_repo` (`access: "push"`). Verified in a routine run: no prompts or denials, clones, push dry-run and `gh api` all work. Extra routine sources were rejected because they stop `.mcp.json` from loading. Applies once the Skill is released (after 0.0.10) and each repo's routine picks it up.
+Done: zen-of-projects Maintenance Routine step 8 has each run review itself and open `Factory improvement:` PRs (label `factory-improvement`, never merged) in `jamesward/skills` or `jamesward/projects`, attaching them with `add_repo` (`access: "push"`). Since 2026-10-15 runs have opened 11 of them (7 merged).
 
+- **Verify:** step 8 pushes to `jamesward/skills` were denied as "Create Public Surface" (jevlm's 2026-10-28 run then held its validated changes unpushed). 19196c8 gives maintenance routines an auto mode environment naming the owners' accounts; check the next week's runs for denials.
 - **Later:** other maintained dependencies (sbta, SkillsJars plugins, cfn-pkl-extras, ...). Step 7 currently only suggests fixes for them in the PR description.
-- **Watch for:** duplicate or noisy PRs across 44 weekly runs. If it happens, move to the evaluator routine (idea 3) or issues instead of PRs.
+- **Watch for:** duplicate or noisy PRs across 47 weekly runs. If it happens, move to the evaluator routine (idea 3) or issues instead of PRs.
 
 ### Open questions
 
 - Where do findings live: issues per affected repo, or one tracking issue in `jamesward/projects`?
-- `RemoteTrigger list` only returns 20 routines (its cursor is ignored); check whether `list_runs` / `get_run_log` paginate, or whether the evaluator has to work per routine id.
 - Should the evaluator also read local (non-routine) agent sessions, like the webjars one, or only routine runs?
 - How to evaluate cost (subscription usage per run) if the run logs don't expose it?
 
@@ -99,13 +99,6 @@ Goal: start open-ended work on one project (improve a metric, explore a change) 
 
 ## Open work
 
-- **Re-runs on skills 0.0.15 (2026-10-15):** the 429 fix holds for sbt (sbt-mcp, sbt-sass, skillsjars-sbt-plugin: no 429s). Gradle repos stopped on a 429 for `skills-0.0.15.pom` because the Google mirror didn't have a 1-hour-old release yet (404), so Gradle fell back to Central; the Skill now treats that like "Not found". Step 8 still filed nothing in 3 runs that had findings: the bootstrap now requires a link per finding before merging (zen-of-projects main, after 0.0.15). Re-check next week.
-- **webjars CI:** tests call the live GitHub API and fail on its rate limit (`Response was 429 - API rate limit exceeded`); third time in two weeks. Needs a token in CI or the tests should treat 429 as skip.
-
-- **Health check 2026-10-14** (44 runs since 10-06): ~34 merged after CI, 5 stopped on Maven Central 429 (all before the Gradle/Maven mirror and `JDK_JAVA_OPTIONS` fixes), 2 need-human. Only 1 `Factory improvement:` PR came out of ~40 runs; most findings were written only into each repo's PR description. Step 8 is now required and stricter (zen-of-projects after 0.0.14). Re-check after the next release: re-run the 429 routines (sbt-mcp, sbt-sass, skillsjars-sbt-plugin, login-jamesward-dev, spring-ai-mcp-demo) and count `Factory improvement:` PRs and issues a week later.
-
-- **Dependabot alerts in cloud runs:** `gh api .../dependabot/alerts` gets `403 Resource not accessible by integration`, so routines can't do step 4 there. Options: a local scheduled check, or ask whether the GitHub proxy can grant `security_events` read.
-- **Push notifications** are still sent by some failing runs despite the bootstrap saying not to.
-
-- **Factory sync** (done 2026-10-05): `factory-sync.py` plus the daily `factory sync` routine keep factory-owned files current in all managed repos without running their routines (see FACTORY.md). Watch the first few daily runs; the cloud `--apply` path (PR, CI wait, merge through `gh api`) is only verified locally.
+- **webjars CI flakes on live network tests:** 3 of 25 runs since 2026-10-01 failed (10-07, 10-15, 10-24), each in tests that call GitHub or git hosts live (`GitHub - tags - work with paging`, `inflight 1.0.4 has the correct github url`, `work with versionless git npm deps` and a `bower-angular-touch.git` clone timing out at 30 s). CI already passes `GITHUB_TOKEN` (since 2022); the `429 - API rate limit exceeded` lines in those logs come from a test fixture (IP 192.0.2.1), not GitHub. Options: `TestAspect.flaky`/retries on the live tests, or a separate non-blocking job for them.
+- **Factory sync merges:** since 2026-11-02 the routine runs `--apply --no-merge` (auto mode denied its merges daily from 10-25). Check that maintenance runs merge their repo's `Factory sync:` PR after CI and that the digest's count of open sync PRs goes down.
 
