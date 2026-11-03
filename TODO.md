@@ -77,6 +77,14 @@ Measured from `heroku logs` dumps and Heroku's metrics API (`api.metrics.heroku.
 - webjars peaks at 88% of quota and webjars-file-service at 83%; neither had an error in 7 days except one R12 on webjars.
 - The apps with `log-runtime-metrics` (webjars, webjars-file-service, javadocs) emit `memory_total`, `memory_quota` and swap every 20 s. heroku-ops doesn't read them yet: add them for the dashboard and an early warning at 95% of quota sustained.
 
+### MCP server (2026-11-03)
+
+heroku-ops serves the triage tools over MCP (FACTORY.md "heroku-ops MCP server"). Not yet verified from a cloud session: it needs the network secret on `JDK25` first, then the check routine. Still to do:
+- The Skill's incident procedure should say to use it: `list_apps`/`app_status` to see what is wrong, `recent_events` and `releases` to find the cause, `probe_now` and `app_status` to confirm a fix.
+- MCP Apps (the pattern in `~/projects/toolbook`): render `timeseries` as a chart, and a status board.
+- Tools worth adding once there is real data: memory and swap from the `log-runtime-metrics` lines, a longer history than the last hour (needs storage), and per-app overrides of the thresholds.
+- Mutating tools (silencing an alert, acknowledging an incident) are deliberately absent: the server is read-only (DESIGN.md 12).
+
 ### Production inventory and dashboard
 
 - **Production infrastructure in FACTORY.md** is a hand-made snapshot from the Heroku CLI (2026-11-02). To keep it current: a read-only `factory-heroku.py --inventory` (allowlist gains `GET /apps/{app}/formation` and `/apps/{app}/addons`; plans, never config values), run by the `heroku control` routine, which opens a PR when it changes.
