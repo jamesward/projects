@@ -61,16 +61,14 @@ Goal: every factory Heroku app is watched by one service, and an incident reache
 
 ### Build order
 
-Done: the docs, the repo skeleton (`jamesward/heroku-ops`: `GET /health`, CI) and its maintenance routine.
+Done (2026-11-03): the repo and its maintenance routine; the control plane (`heroku control`, a protected `main`); the watcher (`jamesward/heroku-ops`: drain and webhook endpoints, probes, heuristics, firing the app's routine, 24 tests, deployed to `jw-heroku-ops`); the first watched app, `json-paste` (drain and webhook applied by the control routine on the real API, logs arriving). heroku-ops is in observe-only mode: no `FIRE_TOKEN_*` config vars exist, so an alert is logged as `incident not delivered`.
 
-1. Finish wiring heroku-ops: buildpacks (`heroku/jvm`, then buildpack-scala), a deploy of `main`, its URL in the repo's `AGENTS.md`. Also verify the routines can push: the first heroku-ops run (2026-11-03) changed nothing, and the repo is public, so the clone proves nothing.
-   Control plane: done and verified in routine runs (2026-11-03): the `heroku control` routine runs on a merged PR and daily, the token reaches the Heroku API through the proxy, `main` has no bypass (a routine's push is rejected), and the report takes about 12 s. Not yet exercised on the real API: `--apply` (the table is empty). Next: heroku-ops receives drain and webhook requests, then the first watched app goes into the table.
-2. The incident procedure in the Skill, plus the saved-prompt opt-in; release the Skill, then `factory-routines-sync.py --apply`.
-3. Dogfood: add an API trigger to the `heroku-ops maintenance` routine (web UI), fire it by hand with a made-up incident, and read the transcript (`factory-transcript.py`). Check that the schedule trigger and the API trigger survive a prompt update.
-4. The watcher: drain, webhooks, probes, heuristics, debounce, fire, fallback notification.
-5. Roll out per app: log drain, webhook, API trigger and token in heroku-ops' config.
-6. Structured logging in the Skill and the apps; `factory-heroku.py`; the `/health` cron job.
-7. The Low tier, with the tier check and the demotion/promotion signals.
+1. Observe `json-paste` for a few days: heap use, log volume, false alerts (`heroku logs -a jw-heroku-ops`, `/health`). Then add the other apps, high-volume ones (`javadocs`, `webjars`, `webjars-file-service`) last. `teamchimbo` is not watched.
+2. The incident procedure in the Skill, plus the saved-prompt opt-in; release the Skill, then `factory-routines-sync.py --apply`. Until then a fire would only start an ordinary maintenance run.
+3. Dogfood: add an API trigger to the `heroku-ops maintenance` routine (web UI), set the app's `FIRE_TOKEN_<APP>` config var, fire it by hand with a made-up incident, and read the transcript (`factory-transcript.py`). Check that the schedule trigger and the API trigger survive a prompt update.
+4. The fallback notification channel (open question below), so an undelivered incident reaches the owner.
+5. Structured logging in the Skill and the apps (heroku-ops itself first), the dashboard, `--inventory`, the `/health` cron job.
+6. The Low tier, with the tier check and the demotion/promotion signals.
 
 ### Production inventory and dashboard
 
