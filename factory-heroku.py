@@ -26,6 +26,7 @@ webhooks. Nothing here can scale, resize, change config vars or touch add-ons (D
 Exit status is 1 if any app failed.
 """
 import hashlib
+import concurrent.futures
 import hmac
 import json
 import os
@@ -205,12 +206,21 @@ def main():
             stale.append(n)
     targets += [(a, False) for a in sorted(stale)]
 
-    for app, wanted in targets:
+    def plan_for(target):
+        app, wanted = target
         try:
-            plan = reconcile(app, ops_host, wanted)
+            return app, wanted, reconcile(app, ops_host, wanted), None
         except ApiError as e:
+            return app, wanted, [], e
+
+    # Each app needs two reads and the API answers slowly through the cloud proxy, so read in parallel.
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+        planned = list(pool.map(plan_for, targets))
+
+    for app, wanted, plan, error in planned:
+        if error:
             if wanted:
-                print(f"!! {app}: {e}")
+                print(f"!! {app}: {error}")
                 failed += 1
             continue
         if not plan:
