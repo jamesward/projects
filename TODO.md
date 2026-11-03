@@ -72,6 +72,12 @@ Done: the docs, the repo skeleton (`jamesward/heroku-ops`: `GET /health`, CI) an
 6. Structured logging in the Skill and the apps; `factory-heroku.py`; the `/health` cron job.
 7. The Low tier, with the tier check and the demotion/promotion signals.
 
+### Production inventory and dashboard
+
+- **FACTORY.md should list each production app's infrastructure:** dyno type and size per process, add-ons and plans, stack and region, so routines and agents have the constraints DESIGN.md 10 relies on. Plan: a read-only `factory-heroku.py --inventory` (allowlist gains `GET /apps/{app}/formation` and `/apps/{app}/addons`; the add-on list has plans and prices, never config values) that prints the table; the `heroku control` routine's daily run could open a PR when it changes.
+- **heroku-ops exposes production metrics and a dashboard** (request rates, error counts, restarts, memory, per app), from the logs it already receives. Design still to do.
+- **Papertrail:** with the drains going to heroku-ops, the add-on can be removed to cut cost. Check first that heroku-ops keeps enough searchable history for what Papertrail is used for (recent raw error lines per incident, not full retention), then remove the add-on app by app.
+
 ### Not verified yet
 
 - Whether a fired run on the maintenance routine behaves (branches, concurrency with a scheduled run on the same repo), and whether updating the saved prompt keeps the API trigger.
