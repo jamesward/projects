@@ -59,7 +59,7 @@ Goal: every factory Heroku app is watched by one service, and an incident gets i
 
 Done: the docs and the repo skeleton (`jamesward/heroku-ops`: `GET /health`, CI, listed in FACTORY.md's Maintained Projects).
 
-1. Register heroku-ops as a managed repo: the Claude App's browser step (`factory-repo-check.sh jamesward/heroku-ops`), a row in the schedule tables, `factory-routines-sync.py --apply`; create the Heroku app and record it in the repo's `AGENTS.md`.
+1. Finish wiring heroku-ops: set the app's buildpacks (`heroku/jvm`, then buildpack-scala), connect `jw-heroku-ops` to the GitHub repo with auto-deploy after CI, record its URL in the repo's `AGENTS.md`. Also verify the routine can push to `jamesward/heroku-ops`: its first run (2026-11-03) changed nothing, and the repo is public, so the clone proves nothing. The daily factory sync's `add_repo` or the first run that opens a PR will show it.
 2. A watcher with no agent: drain, webhooks, probes, debounce, and an incident issue per incident. Catches outages with no AI cost.
 3. Triage only: the agent investigates and writes up the issue.
 4. High-tier fix PRs.
