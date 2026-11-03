@@ -28,7 +28,7 @@ compared with the canonical factory files:
                              watched Heroku apps (FACTORY.md's table); no credentials in the files
   .github/dependabot.yml     must not exist
   line endings               files stored as their .gitattributes say (no diff in a fresh clone)
-  labels                     needs-human and factory-improvement must exist
+  labels                     needs-human, incident and factory-improvement must exist
 
 AGENTS.md and everything else are left to each repo's maintenance routine. --apply commits to the
 bot-owned branch claude/factory-sync, opens or updates one PR titled 'Factory sync: ...', and
@@ -97,6 +97,8 @@ OLD_FETCH_CMDS = ["mkdir -p /tmp/zen-of-projects && curl -fsSL --retry 5 --retry
 SKILL_FILE = "/tmp/jamesward-skills/skills/zen-of-projects/SKILL.md"
 LABELS = [{"name": "needs-human", "color": "B60205",
            "description": "The maintenance routine needs a maintainer decision"},
+          {"name": "incident", "color": "D93F0B",
+           "description": "A production incident reported by heroku-ops"},
           {"name": "factory-improvement", "color": "0E8A16",
            "description": "Proposed by a maintenance routine run; needs a maintainer to review"}]
 
