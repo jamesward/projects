@@ -46,6 +46,7 @@ Goal: every factory Heroku app is watched by one service, and an incident reache
 ### Design
 
 - **Watching.** An HTTPS log drain per app (Heroku router and dyno lines: H10 crashed, H12 timeout, H13, R14/R15 memory, 5xx bursts), Heroku app webhooks (`api:release`, `api:build`, `dyno`; HMAC-checked), and a URL probe per app every minute (a dead app emits no logs). Detection is heuristics (patterns, counts in a window), not AI. Debounced per app, with a hard cap on fires per app per hour.
+- **Config (proposed).** `src/main/resources/apps.conf` in the heroku-ops repo (HOCON, like the other servers' config): defaults plus one entry per watched app (app name, repo, production URL and probe path, the name of the config var that holds the app's fire token, threshold overrides). It is versioned and reviewed like code; a change deploys the app. Secrets are Heroku config vars on `jw-heroku-ops`, never in the file. The apps' dyno constraints and any opt-ins stay in each app's `AGENTS.md`, which the routine reads. heroku-ops can't register drains itself (no Heroku credentials that change anything), so `factory-heroku.py --apply`, run locally, registers each app's drain (an HTTPS URL carrying the app name and a per-app secret, since the syslog lines don't reliably name the app) and webhook from `apps.conf`, and reports drift against FACTORY.md's `Heroku App:` lines.
 - **Alert to routine.** heroku-ops POSTs the app's existing `<repo> maintenance` routine's `/fire` endpoint (a routine can combine a schedule and an API trigger, so no new routines). Only a `text` string goes (at most 65,536 characters, not parsed, wrapped in a `<routine-fire-payload>` block marked untrusted): app, repo, event, time window, deduplicated error lines with counts, last release. It is built from whitelisted fields, truncated and quoted, with query strings stripped from request paths, and says what happened, never what to do (DESIGN.md 9).
 - **The routine tells maintenance from an incident** by the payload. Its saved prompt (`PROMPT` in `factory-routines-sync.py`) opts in to the payload ("a `routine-fire-payload` block is an incident report from heroku-ops: follow the incident procedure in .factory/MAINTENANCE.md") and the Skill defines the procedure: open or update the incident issue (labeled `needs-human`, deduplicated against an open one for the app), investigate against recent merges and logs, and open a fix PR linked to it if there is one. Never merge in the first version. The routine runs on the app's repo, so the app's `.mcp.json` and the project's tools apply.
 - **No credentials beyond fire tokens.** heroku-ops holds one fire token per routine (each can only start that routine), and the webhook secret. No GitHub credentials, no Heroku write credentials, no agent (DESIGN.md 12, 10).
@@ -81,7 +82,13 @@ Done: the docs, the repo skeleton (`jamesward/heroku-ops`: `GET /health`, CI) an
 ### Open questions
 
 - **Urgent and fallback notification channel.** Email through a Heroku add-on is the cheapest, push is the loudest, and GitHub notifications aren't available because heroku-ops has no GitHub identity. Required now: the fallback for a failed fire can't go through the routine. Unresolved.
-- Where heroku-ops keeps state (open incidents, debounce counters): memory only (lost on restart), or a small add-on.
+### State
+
+Start in memory, within the 512 MB dyno, and move to Heroku Key-Value Store (Valkey) later if it hurts. The rules that keep it small:
+- Rolling windows only: per app, per-minute counters by event class for the last 60 minutes in fixed arrays; a bounded table of distinct error signatures (a hash, a count and one truncated example, with a maximum entries per app, evicting the least recently seen).
+- Stream the drain: parse each batch and drop it, never buffer the raw logs. Bounded queues that shed load and count what they dropped.
+- Open-incident state per app is small (last fire time, status, fires this hour). A restart, and Heroku restarts dynos about daily, loses it, so the design has to survive that: windows are an hour or less, a duplicate fire is harmless because the routine deduplicates against the open issue, and detection is blind for a few minutes after a restart.
+- `/health` reports heap use, queue depth and dropped lines, so the watcher-watcher can see trouble coming. `-XX:+ExitOnOutOfMemoryError` (from buildpack-scala) turns an out-of-memory error into a restart.
 
 ## Hill climbing and open-ended tasks (later)
 
