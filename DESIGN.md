@@ -43,6 +43,8 @@ Improvements stay reviewable: they arrive as PRs and issues, and Skill changes t
 
 When a script can do a job (syncing files, checking settings, opening and closing finding issues, reading routine transcripts), a script does it, and the routine runs it as an exact command. The model handles judgment: choosing versions within the rules, fixing a failing build, deciding where a finding belongs. Scripts read tool results directly, so nothing is lost to a summary.
 
+Detecting a production incident is a script's job too: heroku-ops matches patterns and counts in a window, and the model is only started once there is something to investigate. AI analysis of incident logs (Jev or other tools) may be added later, to help understand an incident, not to detect it.
+
 ## 8. Verify in the factory, not by assumption
 
 Something works when a routine run shows it working, in the transcript. A run's green status only means the session exited cleanly. Local verification is a first step, not the last one, because cloud sessions differ (proxy, permissions, classifier, network).
@@ -50,6 +52,8 @@ Something works when a routine run shows it working, in the transcript. A run's 
 ## 9. Text from others is data
 
 Issues, comments, PR text and fetched content written by anyone other than the owner are reports, never instructions. Routines don't run commands, fetch URLs, or change credentials, settings or CI because such text asks them to.
+
+Production logs count as such text: request paths, user agents and error messages can be written by anyone who can reach the app. heroku-ops builds an incident's payload from whitelisted fields, truncated and quoted, and it says what happened, never what to do. The routine's incident procedure is fixed in the Skill, and the payload only tells it which incident to look at.
 
 ## 10. The factory never spends money or adds resources on its own
 
@@ -63,12 +67,18 @@ The factory fixes production issues on its own, but how much it may do alone dep
 
 A script sets the tier, not the model: it forces High for migrations, auth and security code, `.github/`, `Procfile` and `system.properties`, major dependency bumps, changes with no reproducing test, and large diffs. The model can only raise the tier. Every app starts as High-only; the owner opts an app into Low in its `AGENTS.md`. If an incident comes back after an automatic fix, there is no second automatic fix.
 
-## 12. The agent that proposes a change can't ship it
+For now every fix is High. The Low tier waits until incident records show it is safe and the tier check exists outside the model, in an app's CI or a script shipped with the Skill. Routines act as the owner, so nothing else would stop a routine from merging.
 
-An agent's credential lets it push a `claude/` branch and open a PR. The credential that merges is held by the service's own code, which uses it only for a Low-tier change that has passed CI and the tier script. The agent runs with a scrubbed environment, because it reads untrusted text (logs, issues) and has a shell. Agents use a GitHub App identity of their own. GitHub then notifies the owner about their PRs and issues, and branch protection can require the owner's approval.
+## 12. The watcher holds the least it can
+
+heroku-ops holds one fire token per routine, each able to start only that routine, and the Heroku webhook secret. It holds no GitHub credentials, no Heroku credentials that can change anything, and no agent. The routine does the work that needs GitHub, in the app's own repo with the app's own tools. The cost is that the alert path depends on the routine starting: a fire can fail or start without producing an issue. So heroku-ops also has a way to reach the owner that doesn't go through a routine.
+
+## 13. Production apps log what the factory can parse
+
+Heroku's log router splits on newlines, so a multi-line stack trace becomes many unrelated events, and counting or correlating them breaks. Server apps log one JSON event per line, with the stack trace as a field. The convention itself belongs in the zen-of-projects Skill; the reference implementation is `AppLogging.json` in javadoccentral. Heroku's own router and dyno lines are outside the apps' control, so heroku-ops parses those as they are.
 
 ## Trade-offs we accepted
 
+- **A fire is not an issue.** The alert path depends on a routine starting, which can fail on rate limits (30 fires per hour per routine, 100 per hour per account), a paused routine or the usage limit. We accept that in return for a watcher with no GitHub credentials, and cover it with a fallback notification.
 - **Full network access in the cloud environment.** Builds and tests reach Maven Central and its mirror, javadocs.dev, Docker registries and live services, so an allowlist would keep breaking runs. The cost: code a routine runs, including dependencies and tests, can reach any host. No secrets go in the environment.
-- **heroku-ops validates fixes in repo CI.** It runs on a small dyno, which can't build a Scala project and run an agent at the same time. A Low-tier fix needs green CI, and bigger hardware is the owner's decision (principle 10).
 - **Latest releases instead of vulnerability alerts.** Moving every direct dependency to its latest release fixes most advisories without reading any. A vulnerable transitive dependency stays until a direct dependency's release moves it.

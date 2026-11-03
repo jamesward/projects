@@ -41,44 +41,47 @@ Done: zen-of-projects Maintenance Routine step 8 has each run review itself and 
 
 ## heroku-ops: watching and fixing production apps
 
-Goal: every factory Heroku app is watched by one service, and an incident gets investigated and, within the risk rules, fixed without the owner noticing the outage first. Design rules: DESIGN.md 1, 10, 11, 12 (and 6 for self-improvement). Repo: `jamesward/heroku-ops` (Scala server on Heroku, built from the zen-of-projects Skill). Heroku can't call a Claude Code routine's `/fire` endpoint (no custom headers or body), so heroku-ops runs the agent itself instead of firing a routine.
+Goal: every factory Heroku app is watched by one service, and an incident reaches the owner as an issue with evidence and, where possible, a proposed fix, without the owner noticing the outage first. Design rules: DESIGN.md 1, 6, 7, 9-13. Repo: `jamesward/heroku-ops` (Scala server on Heroku, built from the zen-of-projects Skill), app `jw-heroku-ops`.
 
 ### Design
 
-- **Watching.** An HTTPS log drain per app (router and dyno errors: H10 crashed, H12 timeout, H13, R14/R15 memory, 5xx bursts), Heroku app webhooks (`api:release`, `api:build`, `dyno`; HMAC-checked), and a URL probe per app every minute (a dead app emits no logs). Debounced per app: one incident, not one per log line. The log drain and webhooks need no Heroku credentials.
-- **Agent.** `kiro-cli acp` with `KIRO_API_KEY` (headless mode), driven through [zio-acp](https://github.com/jamesward/zio-acp) the way zio-evals' `AcpAgentLoop` does it. It runs in a clone of the app's repo, so that repo's `.kiro/settings/mcp.json` and skills apply. Scrubbed environment, a tool policy (not allow-everything), a temporary working directory.
-- **Credentials.** A GitHub App of its own: the agent's token pushes `claude/` branches and opens PRs; a separate merge token stays in heroku-ops code. No Heroku write credentials anywhere. Branch protection on the apps' default branches.
-- **Tiers.** Low: revert of the causing merge, or a small test-covered fix; merges after green CI. High: everything else, PR plus `needs-human` issue, the owner merges. A script decides the tier (forced High list in DESIGN.md 11). Each app starts High-only; `AGENTS.md` opts in.
-- **Validation.** In the app repo's CI, not on the dyno (a Basic dyno can't build Scala and run an agent). Low needs green CI.
-- **Reminders.** A High PR is reported again after 4 hours while the app is still unhealthy; otherwise the daily digest covers it.
-- **Incident record and self-improvement.** DESIGN.md 6. The agent's instructions are a Skill (`zen-of-ops`) in `jamesward/skills`, delivered through the `com.jamesward:skills` dependency.
+- **Watching.** An HTTPS log drain per app (Heroku router and dyno lines: H10 crashed, H12 timeout, H13, R14/R15 memory, 5xx bursts), Heroku app webhooks (`api:release`, `api:build`, `dyno`; HMAC-checked), and a URL probe per app every minute (a dead app emits no logs). Detection is heuristics (patterns, counts in a window), not AI. Debounced per app, with a hard cap on fires per app per hour.
+- **Alert to routine.** heroku-ops POSTs the app's existing `<repo> maintenance` routine's `/fire` endpoint (a routine can combine a schedule and an API trigger, so no new routines). Only a `text` string goes (at most 65,536 characters, not parsed, wrapped in a `<routine-fire-payload>` block marked untrusted): app, repo, event, time window, deduplicated error lines with counts, last release. It is built from whitelisted fields, truncated and quoted, with query strings stripped from request paths, and says what happened, never what to do (DESIGN.md 9).
+- **The routine tells maintenance from an incident** by the payload. Its saved prompt (`PROMPT` in `factory-routines-sync.py`) opts in to the payload ("a `routine-fire-payload` block is an incident report from heroku-ops: follow the incident procedure in .factory/MAINTENANCE.md") and the Skill defines the procedure: open or update the incident issue (labeled `needs-human`, deduplicated against an open one for the app), investigate against recent merges and logs, and open a fix PR linked to it if there is one. Never merge in the first version. The routine runs on the app's repo, so the app's `.mcp.json` and the project's tools apply.
+- **No credentials beyond fire tokens.** heroku-ops holds one fire token per routine (each can only start that routine), and the webhook secret. No GitHub credentials, no Heroku write credentials, no agent (DESIGN.md 12, 10).
+- **Fallback notification.** A fire can fail (429, 5xx, paused routine, usage limit) or start without producing an issue. heroku-ops notifies the owner by a channel that doesn't go through the routine, and for public repos checks (unauthenticated) that the incident issue appeared. Channel unresolved, see below.
+- **Recovery.** heroku-ops can't see issues, so a recovered app is a second fire ("recovered"), counted against the 30 per hour.
+- **Tiers.** Every fix waits for the owner for now. The Low tier (DESIGN.md 11) comes once incident records show it is safe and a deterministic tier check exists outside the model (an app CI check or a script shipped with the Skill).
+- **Incident record and self-improvement.** DESIGN.md 6: every incident is an issue with a fixed record; the incident procedure ends with the step-8-style review.
+- **Structured logs.** Heroku's logplex splits on newlines, so a multi-line stack trace fragments into separate events. Server apps log one JSON event per line, with the stack trace as a field. Reference: `AppLogging.json` in javadoccentral (zio-logging `consoleJsonLogger`, the SLF4J bridge, annotations as fields, INFO floor). To do: a convention in the Skill's Server Projects (Scala; Spring Boot's built-in structured logging for Gradle/Maven apps; Node: pino), then bring the Heroku apps in line (webjars logs plain text today). heroku-ops parses Heroku's own router and dyno lines (logfmt) regardless.
+- **Later: AI analysis.** Detection stays heuristic. Worth trying later: Jev or other AI tools to analyze an incident's logs (clustering, likely cause) before or inside the routine.
 - **Watching the watcher.** A GitHub Actions cron job checks `/health` every 15 minutes and opens a findings issue if it fails. heroku-ops is a managed repo with its own maintenance routine.
-- **Factory side.** `factory-heroku.py` (like `factory-github-settings.py`) checks each Heroku app listed in FACTORY.md for its drain, webhook and probe entry, the buildpacks rule, and `JAVA_TOOL_OPTIONS` for non-Scala JVM apps, and reports drift as a findings issue.
+- **Factory side.** `factory-heroku.py` (like `factory-github-settings.py`) checks each Heroku app listed in FACTORY.md for its drain, webhook and probe entry, the buildpacks rule, `JAVA_TOOL_OPTIONS` for non-Scala JVM apps, and a fire token in heroku-ops' config, and reports drift as a findings issue.
 
 ### Build order
 
-Done: the docs and the repo skeleton (`jamesward/heroku-ops`: `GET /health`, CI, listed in FACTORY.md's Maintained Projects).
+Done: the docs, the repo skeleton (`jamesward/heroku-ops`: `GET /health`, CI) and its maintenance routine.
 
-1. Finish wiring heroku-ops: set the app's buildpacks (`heroku/jvm`, then buildpack-scala), connect `jw-heroku-ops` to the GitHub repo with auto-deploy after CI, record its URL in the repo's `AGENTS.md`. Also verify the routine can push to `jamesward/heroku-ops`: its first run (2026-11-03) changed nothing, and the repo is public, so the clone proves nothing. The daily factory sync's `add_repo` or the first run that opens a PR will show it.
-2. A watcher with no agent: drain, webhooks, probes, debounce, and an incident issue per incident. Catches outages with no AI cost.
-3. Triage only: the agent investigates and writes up the issue.
-4. High-tier fix PRs.
-5. The Low tier, and the demotion/promotion signals.
-6. `factory-heroku.py` and the `/health` cron job.
+1. Finish wiring heroku-ops: buildpacks (`heroku/jvm`, then buildpack-scala), a deploy of `main`, its URL in the repo's `AGENTS.md`. Also verify the routines can push: the first heroku-ops run (2026-11-03) changed nothing, and the repo is public, so the clone proves nothing.
+2. The incident procedure in the Skill, plus the saved-prompt opt-in; release the Skill, then `factory-routines-sync.py --apply`.
+3. Dogfood: add an API trigger to the `heroku-ops maintenance` routine (web UI), fire it by hand with a made-up incident, and read the transcript (`factory-transcript.py`). Check that the schedule trigger and the API trigger survive a prompt update.
+4. The watcher: drain, webhooks, probes, heuristics, debounce, fire, fallback notification.
+5. Roll out per app: log drain, webhook, API trigger and token in heroku-ops' config.
+6. Structured logging in the Skill and the apps; `factory-heroku.py`; the `/health` cron job.
+7. The Low tier, with the tier check and the demotion/promotion signals.
 
 ### Not verified yet
 
-- `kiro-cli` on a Heroku dyno (installing it during the build), its memory use, and what Kiro charges for API-key usage this way.
-- How ACP permission requests behave under a restricted tool policy (`AcpAgentLoop` allows the first option every time).
+- Whether a fired run on the maintenance routine behaves (branches, concurrency with a scheduled run on the same repo), and whether updating the saved prompt keeps the API trigger.
+- Whether the classifier blocks anything in the incident procedure (issue and PR creation).
 - Whether the `dyno` webhook fires on crashes and R14/R15 restarts (the log drain makes this less important).
 - Log volume from webjars through one drain on a Basic dyno.
 - Heroku threshold alerts (response time, 5xx rate) exist only on Standard/Performance dynos and, as far as I know, notify by email or the Dashboard, not by webhook. Not planned.
 
 ### Open questions
 
-- **Urgent notification channel.** GitHub notifications from the App identity, email through an add-on, or push? A production outage may deserve more than a GitHub notification, and the choice is hard. Unresolved.
-- Limits on rate and cost: how many agent runs a bad day could start. Cap the fires per hour and merge simultaneous incidents into one report.
-- Where heroku-ops keeps state (open incidents, debounce): memory only (lost on restart), or a small add-on.
+- **Urgent and fallback notification channel.** Email through a Heroku add-on is the cheapest, push is the loudest, and GitHub notifications aren't available because heroku-ops has no GitHub identity. Required now: the fallback for a failed fire can't go through the routine. Unresolved.
+- Where heroku-ops keeps state (open incidents, debounce counters): memory only (lost on restart), or a small add-on.
 
 ## Hill climbing and open-ended tasks (later)
 
