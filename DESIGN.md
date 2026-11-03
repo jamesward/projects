@@ -32,10 +32,10 @@ The factory acts as the owner's own GitHub user, and GitHub never notifies anyon
 
 Every run is also a test of the factory. What a run reveals goes back into the factory, not just into that one repo:
 - **Each maintenance run reviews itself** (zen-of-projects step 8): tool friction, missing or wrong instructions, guesses. Each finding goes where it fixes the most: the repo's `AGENTS.md` for that project only, the Skill for every project, or this repo for setup and scripts. Findings for the Skill and the factory become `Factory improvement:` PRs that the owner reviews.
-- **The daily sync checks the factory's own state** (settings drift, sync failures, stale sync PRs) and keeps one `needs-human` issue per finding, closing it once the finding is gone.
+- **The daily sync checks the factory's own state** (settings drift, sync failures, stale sync PRs, a default branch whose CI is red after a merge) and keeps one `needs-human` issue per finding, closing it once the finding is gone. On Mondays its email adds the last week's numbers from GitHub (PRs merged and held, findings opened and closed), so it is visible whether the factory is getting better.
 - **The same problem in several repos is a factory or Skill problem**, not a per-repo `AGENTS.md` note.
 - **heroku-ops works the same way.** Every incident is an issue in the app's repo with a fixed record (how it was detected, time to detect, what the agent did, risk tier, CI result, outcome). After each incident the agent reviews itself like step 8 and files what should change: the app's `AGENTS.md`, the ops Skill, heroku-ops, or the factory. The owner's actions are signals: an incident closed as `false-positive` tunes the filters, and a fix that was reverted or followed by the same incident takes that app back to approval-first automatically. The other direction, giving an app more autonomy, is always the owner's decision.
-- **Planned:** an evaluator that reads the week's run transcripts and incident records and files what needs judgment across runs (see TODO.md).
+- **Nothing reads run logs.** A routine session can't read other runs' transcripts (the tool for it exists only on the owner's machine, and nothing in the factory may depend on that), so evaluation uses what GitHub holds: each run's PR and its "Factory findings" section, the findings issues, and CI. A run that changes nothing leaves no trace, which is accepted.
 
 Improvements stay reviewable: they arrive as PRs and issues, and Skill changes take effect only through a release.
 
