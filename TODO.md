@@ -70,6 +70,13 @@ Done (2026-11-03): the repo and its maintenance routine; the control plane (`her
 5. Structured logging in the Skill and the apps (heroku-ops itself first), the dashboard, `--inventory`, the `/health` cron job.
 6. The Low tier, with the tier check and the demotion/promotion signals.
 
+### Findings from real traffic (2026-11-03)
+
+Measured from `heroku logs` dumps and Heroku's metrics API (`api.metrics.heroku.com/apps/<app>/formation/web/metrics/{memory,errors,load}?process_type=web&step=1h`, read with the CLI token; it works for apps on Standard dynos). The rules and baselines are in heroku-ops' `AGENTS.md`.
+- **`javadocs` has been over its 1 GB memory quota most of the week:** 125 of 169 hours, peak 135%, 402 MB of swap, 17,106 R14 errors in 7 days. Needs an owner decision (look at the JVM heap and native memory; a bigger dyno is a cost decision, DESIGN.md 10). Watching it will alert once, then again after 24 hours while it lasts.
+- webjars peaks at 88% of quota and webjars-file-service at 83%; neither had an error in 7 days except one R12 on webjars.
+- The apps with `log-runtime-metrics` (webjars, webjars-file-service, javadocs) emit `memory_total`, `memory_quota` and swap every 20 s. heroku-ops doesn't read them yet: add them for the dashboard and an early warning at 95% of quota sustained.
+
 ### Production inventory and dashboard
 
 - **Production infrastructure in FACTORY.md** is a hand-made snapshot from the Heroku CLI (2026-11-02). To keep it current: a read-only `factory-heroku.py --inventory` (allowlist gains `GET /apps/{app}/formation` and `/apps/{app}/addons`; plans, never config values), run by the `heroku control` routine, which opens a PR when it changes.
