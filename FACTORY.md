@@ -292,6 +292,31 @@ The apps heroku-ops watches. This table is the source of truth: [`factory-heroku
 | App | Repo | URL | Probe |
 |---|---|---|---|
 
+### Production infrastructure (Heroku)
+
+What each favorited Heroku app runs on (checked 2026-11-02 with `heroku apps:info -a <app> --json` and `heroku domains -a <app>`; all in the personal account, region `us`, stack `heroku-26` unless noted). Agents treat the dyno types and add-on plans as fixed constraints: they fix a problem inside them and never change them (DESIGN.md 10). Refresh the table when you change an app's infrastructure.
+
+| App | Repo | Dynos | Add-ons (service:plan) | Custom domains |
+|---|---|---|---|---|
+| `cimdapp` | `jamesward/cimdnow` | web Eco ×1 | none | cimd.now, www.cimd.now |
+| `javadocs` | `jamesward/javadoccentral` | web Standard-2X ×1 | heroku-inference:claude-opus-4-5, heroku-redis:premium-1, logtail:freelancer | www.javadocs.dev |
+| `jev-llm-c4` | `jamesward/jev-llm-c4` | web Eco ×1 | none | jev-llm-c4.jamesward.dev |
+| `json-paste` | `jamesward/json-paste` | web Eco ×1 | none | none |
+| `jw-heroku-ops` | `jamesward/heroku-ops` | web Eco ×1 | none | none |
+| `login-jamesward-dev` | `jamesward/login-jamesward-dev` | web Eco ×1 | none | login.jamesward.dev |
+| `mcp-apps-demo` | `jamesward/mcp-apps-demo` | web Eco ×1 | none | mcp-demo.jamesward.com |
+| `mcp-sample` | `jamesward/hello-spring-mcp-server` | web Eco ×1 | none | mcp-test.jamesward.com |
+| `mytoolbook-api` | `EffectOrientedProgramming/toolbook` | web Basic ×1 | heroku-postgresql:essential-0, logtail:free, mailgun:starter | api.mytoolbook.ai |
+| `mytoolbook-login` | `EffectOrientedProgramming/toolbook` | web Basic ×1 | logtail:free | login.mytoolbook.ai |
+| `mytoolbook-mcp` | `EffectOrientedProgramming/toolbook` | web Basic ×1 | logtail:free | mcp.mytoolbook.ai, mcp.effectorientedprogramming.com, mcp.bootifulspringai.com |
+| `mytoolbook-proxy` | `EffectOrientedProgramming/toolbook` | web Eco ×1 | none | proxy.mytoolbook.ai |
+| `mytoolbook-www` | `EffectOrientedProgramming/toolbook` | web Basic ×1 | logtail:free | www.mytoolbook.ai |
+| `semver-as-a-service` | `jamesward/semver-as-a-service` | web Eco ×1 | none | semver.webjars.org |
+| `skillsjars` | `skillsjars/skillsjars` | web Basic ×1 | heroku-inference:standard | www.skillsjars.com |
+| `teamchimbo` | unknown | web Eco ×1 (stack `cedar-14`) | none | www.teamchimbo.com |
+| `webjars` | `webjars/webjars` | web Standard-2X ×1 | heroku-redis:premium-1 | www.webjars.org |
+| `webjars-file-service` | `webjars/webjars-file-service` | web Standard-2X ×1 | none | none |
+
 ### Production service versions (Heroku, run locally)
 
 Container images in tests track the production service they stand in for (zen-of-projects "Container images track production"), so routines never bump them. Check production from this machine, where the Heroku CLI is logged in (`heroku login`), and update the image plus the `AGENTS.md` note only when production changed:
