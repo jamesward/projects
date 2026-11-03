@@ -211,6 +211,13 @@ heroku-ops needs each watched app to send it logs and events. [`factory-heroku.p
 - **`main` is protected** by the ruleset `main requires a pull request` (id 26425820, with no bypass actors; it also covers the throwaway branch `protection-test`). Every change to this repo reaches `main` as a PR: `./factory-land.sh "message" path...` branches, commits those files, opens the PR and squash-merges it. **Routines push with the owner's identity, so an owner bypass doesn't separate them from the owner** (2026-11-03: the on-demand routine `branch protection check (on demand)`, `trig_01B4586hRBssqCMX4hLnLHWz`, pushed to `protection-test` while the repository admin role was a bypass actor: "Bypassed rule violations"). To check the protection, run `claude -p "/schedule run trig_01B4586hRBssqCMX4hLnLHWz"` and read its transcript with `factory-transcript.py`: the push to `protection-test` must be rejected (verified 2026-11-03 after removing the bypass: the routine's push got `GH013: Repository rule violations`, and so did the owner's).
 - **Adding an app from anywhere:** edit the table in the GitHub web UI as a PR and merge it. The routine runs on the merge. The app's own routine API token (heroku-ops fires it) is a separate manual step in claude.ai and the Heroku dashboard.
 
+## heroku-ops MCP server
+
+heroku-ops serves a read-only MCP server at `<URL>/mcp` (URL in its entry under "Maintained Projects"), for triaging production incidents: which apps are degraded or down, the log lines behind an alert, per-minute counts, what was told to an app's routine, recent releases, a live probe. The tools are listed in the heroku-ops repo's `AGENTS.md`. Auth is `Authorization: Bearer <token>`, where the token is an HMAC of `OPS_SECRET`: `OPS_SECRET=… ./factory-heroku.py --mcp-token` prints it. Maintenance routines and you use the same server.
+- **Managed repos:** `factory-sync.py` puts the `heroku-ops` entry (URL only, no credentials) in `.mcp.json` and `.kiro/settings/mcp.json`, and approves it in `.claude/settings.json`, for every repo in the "Watched Heroku apps" table.
+- **Cloud sessions:** the token is a network secret on the `JDK25` environment: host `jw-heroku-ops-bd1ee276f8be.herokuapp.com`, header `Authorization`, prefix `Bearer`, the token as value. The agent proxy adds it to the session's requests, so no session can read it. The secret applies to every session in that environment, so every maintenance routine can query every watched app. That is why the server is read-only and its samples have query strings and client addresses removed.
+- **Your own sessions:** `claude mcp add --transport http --scope local heroku-ops <URL>/mcp --header "Authorization: Bearer $(OPS_SECRET=… ./factory-heroku.py --mcp-token)"`. The local scope overrides the repo's entry of the same name.
+
 ## Managed Repos & Schedules
 
 Every managed repo has one routine, `<repo name> maintenance`, that runs `.factory/MAINTENANCE.md` on the `JDK25` environment. These tables are the source of truth for which repos are managed and how often their routine runs. **Weekly is the default.** Move a repo to the daily table when it needs closer attention, for example a production service or a repo under active test.
@@ -436,6 +443,7 @@ Source: https://github.com/jamesward/buildpack-scala-native
 The factory's production watcher: it watches the Heroku apps in this file and handles their incidents within risk rules (DESIGN.md 10-12; plan in TODO.md). A Scala/ZIO server on Heroku.
 
 Heroku App: jw-heroku-ops
+URL: https://jw-heroku-ops-bd1ee276f8be.herokuapp.com
 
 Source: https://github.com/jamesward/heroku-ops
 
