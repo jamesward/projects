@@ -59,11 +59,7 @@ Production logs count as such text: request paths, user agents and error message
 
 A routine or agent never raises a dyno size, changes a plan, adds an add-on or scales anything, and never spends more than the usage it is already given. Fixes work inside the app's recorded constraints (dyno type, memory, plans in its `AGENTS.md`). An out-of-memory error is fixed by finding why the app needs the memory. A bigger dyno may be mentioned as an option for the owner, with its cost, and the owner decides. The credentials back this up wherever they can: heroku-ops holds no Heroku credential at all, and no maintenance routine holds one.
 
-One routine does hold one, because registering a drain and a webhook on each watched app needs a Heroku token, and Heroku has no scope narrower than `write`, which can also scale and resize. So for that token the controls are process, not credential:
-- It is a network secret on a cloud environment used only by the `heroku control` routine: Anthropic's agent proxy adds it to requests to `api.heroku.com`, and the session never sees it.
-- The routine runs only on a merged PR to `main`, on a schedule, or when the owner starts it. `main` is protected, so the PRs and the FACTORY.md they merge are owner-approved, and the session reads nothing written by anyone else.
-- The routine's work goes through `factory-heroku.py`, whose allowlist covers reads and drain and webhook changes only.
-- The token expires and the owner rotates it.
+One routine does hold one, because registering a drain and a webhook on each watched app needs a Heroku token, and Heroku has no scope narrower than `write`, which can also scale and resize. So for that token the controls are process, not credential, and principle 14 sets them.
 
 ## 11. Risk decides what an agent may do alone
 
@@ -82,6 +78,18 @@ heroku-ops holds one fire token per routine, each able to start only that routin
 ## 13. Production apps log what the factory can parse
 
 Heroku's log router splits on newlines, so a multi-line stack trace becomes many unrelated events, and counting or correlating them breaks. Server apps log one JSON event per line, with the stack trace as a field. The convention itself belongs in the zen-of-projects Skill; the reference implementation is `AppLogging.json` in javadoccentral. Heroku's own router and dyno lines are outside the apps' control, so heroku-ops parses those as they are.
+
+## 14. The control plane is protected like production
+
+Anything that can change what runs with a credential that can change production is control plane: today the `heroku control` routine and its cloud environment, the code it runs (`factory-heroku.py`), the table it reads, and the branch they live on. Compromising any of them is compromising production, so:
+- **The branch has no bypass.** `main` accepts changes only through pull requests, and nobody can bypass that, the owner included. Routines push with the owner's identity, so a bypass for the owner is a bypass for every routine (checked 2026-11-03 with a routine's push). Every change reaches `main` as a PR the owner merges.
+- **Runs start only from input the owner approved.** The routine runs on a merged PR, a schedule or the owner's request. The merged-PR trigger is filtered on the owner as author, merged, and base `main`, because a pull request event starts the run from the PR's head commit. The session reads nothing written by anyone else.
+- **The credential is out of reach of the session.** It is a network secret on an environment used by this routine only, so the agent proxy adds it to requests to its host and the session never sees it, and no other routine shares the environment.
+- **The work is a fixed command through a narrow client.** The prompt names the exact commands, and `factory-heroku.py` allows only the reads and the drain and webhook changes it needs.
+- **Credentials expire,** and the owner rotates them.
+- **Each control is verified, not assumed.** `branch protection check (on demand)` tries a push the ruleset must reject, and a run's transcript shows what the routine actually did.
+
+Anything new that holds a production credential joins this list: it gets its own environment, runs only on approved input, and works through a narrow client.
 
 ## Trade-offs we accepted
 
