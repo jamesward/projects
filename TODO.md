@@ -57,12 +57,14 @@ Goal: every factory Heroku app is watched by one service, and an incident gets i
 
 ### Build order
 
-1. Docs (this section, DESIGN.md) and the repo skeleton.
+Done: the docs and the repo skeleton (`jamesward/heroku-ops`: `GET /health`, CI, listed in FACTORY.md's Maintained Projects).
+
+1. Register heroku-ops as a managed repo: the Claude App's browser step (`factory-repo-check.sh jamesward/heroku-ops`), a row in the schedule tables, `factory-routines-sync.py --apply`; create the Heroku app and record it in the repo's `AGENTS.md`.
 2. A watcher with no agent: drain, webhooks, probes, debounce, and an incident issue per incident. Catches outages with no AI cost.
 3. Triage only: the agent investigates and writes up the issue.
 4. High-tier fix PRs.
 5. The Low tier, and the demotion/promotion signals.
-6. `factory-heroku.py`, the `/health` cron job, and registering heroku-ops as a managed repo (browser step for the Claude App).
+6. `factory-heroku.py` and the `/health` cron job.
 
 ### Not verified yet
 

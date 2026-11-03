@@ -383,6 +383,13 @@ Used by cimdapp. Managed weekly (zen-of-projects "Heroku Buildpack Projects": `b
 Source: https://github.com/jamesward/buildpack-scala-native
 
 
+### heroku-ops
+
+The factory's production watcher: it watches the Heroku apps in this file and handles their incidents within risk rules (DESIGN.md 10-12; plan in TODO.md). A Scala/ZIO server on Heroku (app not created yet). Not yet in the schedule tables: that needs the Claude App's browser step first (`factory-repo-check.sh jamesward/heroku-ops`).
+
+Source: https://github.com/jamesward/heroku-ops
+
+
 ### James Ward Agent Skills
 
 Source: https://github.com/jamesward/skills
