@@ -75,6 +75,8 @@ For now every fix is High. The Low tier waits until incident records show it is 
 
 heroku-ops holds one fire token per routine, each able to start only that routine, and the Heroku webhook secret. It holds no GitHub credentials, no Heroku credentials that can change anything, and no agent. The routine does the work that needs GitHub, in the app's own repo with the app's own tools. The cost is that the alert path depends on the routine starting: a fire can fail or start without producing an issue. So heroku-ops also has a way to reach the owner that doesn't go through a routine.
 
+What heroku-ops exposes to agents is read-only: an MCP server for triage, with a bearer token that is an HMAC of `OPS_SECRET` (so the master never leaves heroku-ops and the factory) and reaches cloud sessions only as a network secret. A fix is a pull request, never a call to heroku-ops.
+
 ## 13. Production apps log what the factory can parse
 
 Heroku's log router splits on newlines, so a multi-line stack trace becomes many unrelated events, and counting or correlating them breaks. Server apps log one JSON event per line, with the stack trace as a field. The convention itself belongs in the zen-of-projects Skill; the reference implementation is `AppLogging.json` in javadoccentral. Heroku's own router and dyno lines are outside the apps' control, so heroku-ops parses those as they are.

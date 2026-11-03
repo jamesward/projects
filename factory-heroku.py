@@ -2,6 +2,7 @@
 """Make each watched Heroku app send its logs and events to heroku-ops, as FACTORY.md says.
 
     ./factory-heroku.py --lint        # check the table in FACTORY.md only (no network, no token)
+    OPS_SECRET=... ./factory-heroku.py --mcp-token   # the bearer token for heroku-ops' MCP server (no network)
     ./factory-heroku.py               # report drift (dry run)
     ./factory-heroku.py --apply       # add/replace/remove the drains and webhooks that differ
     ./factory-heroku.py --apply --rotate   # also replace every drain and webhook (after changing OPS_SECRET)
@@ -181,6 +182,11 @@ def reconcile(app, ops_host, wanted):
 
 
 def main():
+    if "--mcp-token" in sys.argv:
+        if not os.environ.get("OPS_SECRET"):
+            sys.exit("OPS_SECRET is not set")
+        print(hmac.new(os.environ["OPS_SECRET"].encode(), b"mcp", hashlib.sha256).hexdigest())
+        return
     rows, errors = watched_apps()
     for e in errors:
         print(f"!! FACTORY.md: {e}")

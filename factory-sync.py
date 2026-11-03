@@ -23,6 +23,8 @@ compared with the canonical factory files:
   .claude/settings.json      that server in enabledMcpjsonServers (+ the Skill fetch permission for
                              NO_SKILLS_DEP); other settings kept
   .kiro/settings/mcp.json    the factory-owned server entry; others kept
+  heroku-ops MCP server      in .mcp.json, .kiro/settings/mcp.json and .claude/settings.json of the repos of the
+                             watched Heroku apps (FACTORY.md's table); no credentials in the files
   .github/dependabot.yml     must not exist
   line endings               files stored as their .gitattributes say (no diff in a fresh clone)
   labels                     needs-human and factory-improvement must exist
@@ -199,7 +201,56 @@ def put_server(p, name, entry, changes, drop_prefix=None):
     return None
 
 
+def ops_mcp():
+    """(MCP URL of heroku-ops, repos of the watched apps), from FACTORY.md. The URL is None until the heroku-ops entry has one."""
+    md = FACTORY.read_text()
+    entry = md[md.index("### heroku-ops"):] if "### heroku-ops" in md else ""
+    entry = entry[:entry.index("\n### ", 4)] if "\n### " in entry[4:] else entry
+    m = re.search(r"^URL: (https://\S+?)/?$", entry, re.M)
+    repos = set()
+    if "### Watched Heroku apps" in md:
+        for line in md[md.index("### Watched Heroku apps"):].splitlines()[1:]:
+            if line.startswith("#"):
+                break
+            cells = [c.strip().strip("`") for c in line.strip().strip("|").split("|")]
+            if line.startswith("|") and len(cells) == 4 and "/" in cells[1]:
+                repos.add(cells[1])
+    return (m.group(1) + "/mcp" if m else None), repos
+
+
+OPS_SERVER = "heroku-ops"
+
+
+def ensure_ops_mcp(d, url, changes):
+    """The heroku-ops server in the MCP configs and approved in .claude/settings.json. No credentials in the files: a
+    cloud session gets the bearer token from a network secret on its environment, and a local session adds its own with
+    `claude mcp add --scope local` (FACTORY.md "heroku-ops MCP server")."""
+    entry = {"type": "http", "url": url}
+    for rel in (".mcp.json", ".kiro/settings/mcp.json"):
+        j = put_server(d / rel, OPS_SERVER, entry, changes)
+        if j is not None:
+            (d / rel).parent.mkdir(parents=True, exist_ok=True)
+            (d / rel).write_text(json.dumps(j, indent=2) + "\n")
+            changes.append(f"{rel}: heroku-ops MCP server")
+    st = load_json(d / ".claude/settings.json")
+    if st is None:
+        changes.append(".claude/settings.json: not valid JSON, left alone")
+    elif OPS_SERVER not in st.setdefault("enabledMcpjsonServers", []):
+        st["enabledMcpjsonServers"].append(OPS_SERVER)
+        (d / ".claude").mkdir(exist_ok=True)
+        (d / ".claude/settings.json").write_text(json.dumps(st, indent=2) + "\n")
+        changes.append(".claude/settings.json: approve heroku-ops")
+
+
 def desired(repo, d, boot):
+    kind, changes = desired_files(repo, d, boot)
+    url, watched = ops_mcp()
+    if url and repo in watched and kind != "site" and repo not in CUSTOM_MAINTENANCE:
+        ensure_ops_mcp(Path(d), url, changes)
+    return kind, changes
+
+
+def desired_files(repo, d, boot):
     """Edit the checkout at d toward the canonical files; return a list of change descriptions."""
     d = Path(d)
     changes = []
