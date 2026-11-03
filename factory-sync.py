@@ -7,7 +7,8 @@
                                           # maintenance run merges its PR once CI passes, or run --apply
     ./factory-sync.py --list           # print the managed repos (for add_repo in a cloud session)
     ./factory-sync.py owner/repo ...   # limit to these repos
-    ./factory-sync.py --digest         # only list open items that need the owner (see below)
+    ./factory-sync.py --digest         # only list open items that need the owner (see below); Mondays also last week's numbers
+    ./factory-sync.py --digest --weekly  # the last week's numbers any day
 
 Managed repos are the ones in FACTORY.md's schedule tables. For each, the default branch is
 compared with the canonical factory files:
@@ -50,6 +51,8 @@ opens them as the owner's own GitHub user, so GitHub never notifies the owner ab
 routine's emailed reply carries this list instead. It reads each repo's issues endpoint (not the
 search API), which works for the repos attached to a cloud session. Uses only git and `gh api` (REST), so it also works in cloud sessions.
 """
+import concurrent.futures
+import datetime as dt
 import json
 import os
 import re
@@ -59,6 +62,7 @@ import tempfile
 import time
 import urllib.request
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 HERE = Path(__file__).resolve().parent
 FACTORY = HERE / "FACTORY.md"
@@ -436,6 +440,78 @@ def unreleased(repo, prefix, paths):
     return (created, repo, i, ["unreleased"], [])
 
 
+def weekly(repos, now=None):
+    """The factory's last week from GitHub alone (routine sessions can't read run logs, and a run that changes nothing leaves no
+    trace on GitHub): maintenance PRs, sync PRs, Factory improvement items and findings issues."""
+    now = now or dt.datetime.now(dt.timezone.utc)
+    since = now - dt.timedelta(days=7)
+    iso = since.strftime("%Y-%m-%dT%H:%M:%SZ")
+    when = lambda t: dt.datetime.fromisoformat(t.replace("Z", "+00:00")) if t else None
+    recent = lambda t: bool(t) and when(t) >= since
+
+    def items(repo):
+        try:
+            return repo, gh(f"repos/{repo}/issues?state=all&since={iso}&per_page=100"), None
+        except Exception as e:
+            return repo, [], str(e).splitlines()[-1][:100]
+
+    maint = {"merged": 0, "closed": 0, "open": 0}
+    held, sync = [], {"merged": 0, "closed": 0, "open": 0}
+    improved = {"opened": 0, "done": 0, "open": 0}
+    found = {"opened": 0, "closed": 0}
+    unreadable = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+        results = list(pool.map(items, sorted(set(repos) | set(FACTORY_REPOS))))
+    for repo, page, error in results:
+        if error:
+            unreadable.append(repo)
+        for i in page:
+            title = i["title"]
+            is_pr = "pull_request" in i
+            labels = [l["name"] for l in i.get("labels", [])]
+            merged = recent((i.get("pull_request") or {}).get("merged_at"))
+            closed = recent(i.get("closed_at"))
+            if is_pr and title.startswith("Maintenance:"):
+                if merged:
+                    maint["merged"] += 1
+                elif closed:
+                    maint["closed"] += 1
+                if i["state"] == "open":
+                    maint["open"] += 1
+                    if "needs-human" in labels:
+                        held.append((when(i["created_at"]), repo, i["number"], title))
+            elif is_pr and title.startswith("Factory sync:"):
+                if merged:
+                    sync["merged"] += 1
+                elif closed:
+                    sync["closed"] += 1
+                elif i["state"] == "open":
+                    sync["open"] += 1
+            elif title.startswith(FACTORY_IMPROVEMENT_TITLE):
+                improved["opened"] += int(recent(i["created_at"]))
+                improved["done"] += int(closed)
+                improved["open"] += int(i["state"] == "open")
+            elif repo == FINDINGS_REPO and not is_pr and "factory-finding:" in (i.get("body") or ""):
+                found["opened"] += int(recent(i["created_at"]))
+                found["closed"] += int(closed)
+    local = ZoneInfo("America/Denver")
+    print(f"\n## Last week ({since.astimezone(local):%Y-%m-%d} to {now.astimezone(local):%Y-%m-%d}, from GitHub)")
+    print(f"- Maintenance PRs: {maint['merged']} merged, {maint['closed']} closed unmerged, {maint['open']} open"
+          f" ({len(held)} waiting for you).")
+    for created, repo, number, title in sorted(held)[:8]:
+        print(f"  - [{repo}#{number}](https://github.com/{repo}/pull/{number}), {(now - created).days}d: {title[:80]}")
+    print(f"- Factory sync PRs: {sync['merged']} merged, {sync['closed']} closed, {sync['open']} open.")
+    print(f"- Factory improvements: {improved['opened']} opened, {improved['done']} closed or merged, {improved['open']} open now.")
+    print(f"- Findings issues: {found['opened']} opened, {found['closed']} closed.")
+    if unreadable:
+        print(f"- (couldn't read {', '.join(unreadable[:5])}{' ...' if len(unreadable) > 5 else ''})")
+    print("- Runs that change nothing leave no trace on GitHub, so they aren't counted.")
+
+
+def is_monday():
+    return dt.datetime.now(ZoneInfo("America/Denver")).weekday() == 0
+
+
 def digest(repos):
     """Open PRs and issues that need the owner, oldest first: labeled with a DIGEST_LABELS label,
     or titled "Factory improvement:" (routines don't always manage to add the label). PRs that
@@ -535,6 +611,36 @@ def settings_finding():
     return ("settings", f"Factory: GitHub settings differ on {len(lines)} repo(s)", body), not unknown
 
 
+BAD_CONCLUSIONS = ("failure", "timed_out", "startup_failure")
+
+
+def ci_finding(repo):
+    """((key, title, body) or None, complete) for the latest commit on the repo's default branch: red CI is a finding. Checks still
+    running, no checks at all, or a repo that can't be read leave an open finding as it is (complete False)."""
+    key = f"ci-red:{repo}"
+    try:
+        info = gh(f"repos/{repo}")
+        if info.get("archived"):
+            return None, True
+        branch = info["default_branch"]
+        sha = gh(f"repos/{repo}/branches/{branch}")["commit"]["sha"]
+        runs = gh(f"repos/{repo}/commits/{sha}/check-runs?per_page=100").get("check_runs", [])
+        statuses = gh(f"repos/{repo}/commits/{sha}/status").get("statuses", [])
+    except Exception:
+        return None, False
+    if any(r["status"] != "completed" for r in runs) or any(s["state"] == "pending" for s in statuses) or not (runs or statuses):
+        return None, False
+    bad = [r for r in runs if r["conclusion"] in BAD_CONCLUSIONS]
+    bad_status = [s for s in statuses if s["state"] in ("failure", "error")]
+    if not bad and not bad_status:
+        return None, True
+    names = ", ".join([f"`{r['name']}`" for r in bad] + [f"`{s['context']}`" for s in bad_status])
+    return (key, f"CI is failing on {repo}'s default branch",
+            f"The latest commit on `{branch}` of `{repo}` ([{sha[:7]}](https://github.com/{repo}/commit/{sha})) has failing checks: {names}.\n\n"
+            f"See [the runs](https://github.com/{repo}/actions?query=branch%3A{branch}). A merge that holds only routine changes "
+            "shouldn't leave the default branch red: look at what the last maintenance PR changed.", ), True
+
+
 def findings(repos, failures, sync_prs):
     """(found {key: (title, body)}, checked {keys whose absence this run confirmed})."""
     found, checked = {}, set()
@@ -564,10 +670,12 @@ def findings(repos, failures, sync_prs):
             f"Factory: {len(stale)} \"Factory sync:\" PR(s) open more than {STALE_SYNC_DAYS} days",
             "Each repo's maintenance run should merge its open `Factory sync:` PR once CI passes "
             "(`.factory/MAINTENANCE.md`), but these are still open:\n\n" + "\n".join(stale) +
-            "\n\nCheck the repo's last run (`./factory-transcript.py <owner/repo> --last`), or merge them "
-            "with `./factory-sync.py --apply` locally.")
+            "\n\nOpen the repo's latest maintenance PR for the link to its run, or merge the sync PR by hand.")
     f, complete = settings_finding()
     add(f, complete, "settings")
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+        for repo, (f, complete) in zip(repos, pool.map(ci_finding, repos)):
+            add(f, complete, f"ci-red:{repo}")
     return found, checked
 
 
@@ -611,6 +719,12 @@ def sync_issues(found, checked, apply):
 
 # ---------- main ----------
 
+def digest_and_weekly(repos):
+    digest(repos)
+    if is_monday() or "--weekly" in sys.argv:
+        weekly(repos)
+
+
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     apply = "--apply" in sys.argv
@@ -620,7 +734,7 @@ def main():
         print("\n".join(repos + [r for r in FACTORY_REPOS if r not in repos]))
         return
     if "--digest" in sys.argv:
-        digest(repos)
+        digest_and_weekly(repos)
         return
     if args:
         unknown = set(args) - set(repos)
@@ -736,7 +850,7 @@ def main():
             sync_issues(*findings(repos, failures, sync_prs), apply)
         except Exception as e:
             print(f"!! findings: {e}")
-    digest(repos)
+    digest_and_weekly(repos)
     run("rm", "-rf", str(work), check=False)
 
 
