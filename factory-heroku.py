@@ -3,7 +3,6 @@
 
     ./factory-heroku.py --lint        # check the table in FACTORY.md only (no network, no token)
     OPS_SECRET=... ./factory-heroku.py --mcp-token   # the bearer token for heroku-ops' MCP server (no network)
-    OPS_SECRET=... ./factory-heroku.py --mcp-url     # its secret-path URL, for clients that can't send a header (claude.ai)
     ./factory-heroku.py               # report drift (dry run)
     ./factory-heroku.py --apply       # add/replace/remove the drains and webhooks that differ
     ./factory-heroku.py --apply --rotate   # also replace every drain and webhook (after changing OPS_SECRET)
@@ -183,17 +182,6 @@ def reconcile(app, ops_host, wanted):
 
 
 def main():
-    if "--mcp-url" in sys.argv:
-        if not os.environ.get("OPS_SECRET"):
-            sys.exit("OPS_SECRET is not set")
-        md = FACTORY.read_text()
-        entry = md[md.index("### heroku-ops"):] if "### heroku-ops" in md else ""
-        m = re.search(r"^URL: (https://\S+?)/?$", entry, re.M)
-        if not m:
-            sys.exit("FACTORY.md's heroku-ops entry has no URL: line")
-        token = hmac.new(os.environ["OPS_SECRET"].encode(), b"mcp-url", hashlib.sha256).hexdigest()
-        print(f"{m.group(1)}/{token}")
-        return
     if "--mcp-token" in sys.argv:
         if not os.environ.get("OPS_SECRET"):
             sys.exit("OPS_SECRET is not set")
