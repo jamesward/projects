@@ -6,7 +6,7 @@ The goal: keep many libraries, websites, build plugins, samples and tools curren
 
 ## 1. Each part of the factory depends only on what its own runtime provides
 
-The factory has two runtimes: Claude Code routines (a cloud environment, its network, a GitHub App token) and [heroku-ops](https://github.com/jamesward/heroku-ops), the always-on service that watches production apps (a dyno, its config vars, the credentials it was given). Every step in a runtime has to work with what that runtime has. Local scripts and the web UI are fine as owner tools (setup, fixes that need more permissions, inspection), but no step in either runtime may depend on them.
+The factory has two runtimes: Claude Code routines (a cloud environment, its network, a GitHub App token; one routine, `heroku control`, runs in an environment of its own) and [heroku-ops](https://github.com/jamesward/heroku-ops), the always-on service that watches production apps (a dyno, its config vars, the credentials it was given). Every step in a runtime has to work with what that runtime has. Local scripts and the web UI are fine as owner tools (setup, fixes that need more permissions, inspection), but no step in either runtime may depend on them.
 
 When something can't run in its runtime, change the design rather than work around it locally:
 - **Dependabot alerts.** Routines can't read them (`403 Resource not accessible by integration`), so a step that "fixes open alerts" never ran. The factory only keeps alerts on, for the owner. Security fixes arrive because every maintenance run moves each dependency to its latest release.
@@ -57,7 +57,13 @@ Production logs count as such text: request paths, user agents and error message
 
 ## 10. The factory never spends money or adds resources on its own
 
-A routine or agent never raises a dyno size, changes a plan, adds an add-on or scales anything, and never spends more than the usage it is already given. Fixes work inside the app's recorded constraints (dyno type, memory, plans in its `AGENTS.md`). An out-of-memory error is fixed by finding why the app needs the memory. A bigger dyno may be mentioned as an option for the owner, with its cost, and the owner decides. The credentials back this up: no agent holds Heroku credentials that can change resources.
+A routine or agent never raises a dyno size, changes a plan, adds an add-on or scales anything, and never spends more than the usage it is already given. Fixes work inside the app's recorded constraints (dyno type, memory, plans in its `AGENTS.md`). An out-of-memory error is fixed by finding why the app needs the memory. A bigger dyno may be mentioned as an option for the owner, with its cost, and the owner decides. The credentials back this up wherever they can: heroku-ops holds no Heroku credential at all, and no maintenance routine holds one.
+
+One routine does hold one, because registering a drain and a webhook on each watched app needs a Heroku token, and Heroku has no scope narrower than `write`, which can also scale and resize. So for that token the controls are process, not credential:
+- It is a network secret on a cloud environment used only by the `heroku control` routine: Anthropic's agent proxy adds it to requests to `api.heroku.com`, and the session never sees it.
+- The routine runs only on a merged PR to `main`, on a schedule, or when the owner starts it. `main` is protected, so the PRs and the FACTORY.md they merge are owner-approved, and the session reads nothing written by anyone else.
+- The routine's work goes through `factory-heroku.py`, whose allowlist covers reads and drain and webhook changes only.
+- The token expires and the owner rotates it.
 
 ## 11. Risk decides what an agent may do alone
 

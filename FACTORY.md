@@ -197,6 +197,18 @@ The routine `factory sync` (`trig_01NUJivtCGbUbQCyZjZAju5w`, daily 05:07 America
 
 Run it locally the same way after editing the factory (`./factory-sync.py`, then `--apply`). Verified 2026-10-05: a cloud session `add_repo`'d all 44 repos without prompts and the report took 88s; locally `--apply` opened, CI-checked and merged toolbook PR #99. In cloud sessions the script reads the Skill from a clone of jamesward/skills, because the git proxy refuses start.jamesward.com's redirect to the raw file (HTTP 403).
 
+## Heroku control (watched apps)
+
+heroku-ops needs each watched app to send it logs and events. [`factory-heroku.py`](factory-heroku.py) does that: it reads the "Watched Heroku apps" table (under "Registries & Production Identifiers") and gives each listed app one log drain and one app webhook that point at heroku-ops, replaces the ones whose URL changed, and removes them from apps that were dropped from the table. It touches nothing else, and only drains and webhooks that point at heroku-ops. `--lint` checks the table without a token. To run it by hand: `OPS_SECRET=… HEROKU_API_KEY=$(heroku auth:token) ./factory-heroku.py` (report), then `--apply`.
+
+**The `heroku control` routine** runs it, in its own cloud environment `factory-control`. It isn't in the schedule tables (like `factory sync`), so `factory-routines-sync.py` lists it as unmanaged. Why it is built this way: DESIGN.md 10.
+- **Source:** `jamesward/projects`. **Triggers:** GitHub `pull_request.closed` with *is merged* true and base branch `main` (the closest a routine gets to "push to main": direct pushes by the owner don't start it), a daily schedule (drift), and an API trigger or *Run now* for on-demand runs. Email notifications only.
+- **Environment `factory-control`** (claude.ai/code → environment selector → New environment): Trusted network access; a network secret for the host `api.heroku.com` with header `Authorization`, prefix `Bearer`, and the Heroku token as value; the environment variable `OPS_SECRET`. The same `OPS_SECRET` is a config var on `jw-heroku-ops`. Create the token with `heroku authorizations:create -d factory-control --scope write --expires-in <seconds>` and rotate it before it expires. Never use this environment for any other routine: the secret applies to every session in it. After changing `OPS_SECRET`, run once with `--rotate`.
+- **Prompt:** "Heroku control: make each watched Heroku app send its logs and events to heroku-ops, as FACTORY.md says. I (the repo owner) authorize this run to add and remove log drains and webhooks that point at heroku-ops, through ./factory-heroku.py only. Steps: (1) Run exactly: python3 -u ./factory-heroku.py --lint. If it prints errors, quote them and stop. (2) Run exactly: python3 -u ./factory-heroku.py. (3) If it reports changes, run exactly: python3 -u ./factory-heroku.py --apply, then run step 2 again and confirm it reports 0 changes. (4) Reply with the script's output. It contains no secrets. Do not call the Heroku API any other way, do not read config vars, do not edit files, do not run any repository's maintenance routine, and do not send push notifications."
+- **Auto mode:** the classifier may question production changes. Give the routine `auto_mode_environment` (the five owners' accounts as trusted, as for `factory sync`) and an `auto_mode_allow` entry describing `./factory-heroku.py --apply` as authorized.
+- **`main` is protected** with a ruleset that requires a pull request, and the owner (repository admin) can bypass it, so direct pushes from this machine still work. Check that a routine's push to `main` is refused; if the Claude App can bypass the ruleset, anything that can push to `main` could change what runs with the token.
+- **Adding an app from anywhere:** edit the table in the GitHub web UI as a PR and merge it. The routine runs on the merge. The app's own routine API token (heroku-ops fires it) is a separate manual step in claude.ai and the Heroku dashboard.
+
 ## Managed Repos & Schedules
 
 Every managed repo has one routine, `<repo name> maintenance`, that runs `.factory/MAINTENANCE.md` on the `JDK25` environment. These tables are the source of truth for which repos are managed and how often their routine runs. **Weekly is the default.** Move a repo to the daily table when it needs closer attention, for example a production service or a repo under active test.
@@ -270,6 +282,13 @@ It only reports by default. `--apply` creates or updates routines to match the t
 | `jamesward/heroku-ops` | Fri | 07:37 | `trig_01FXYyJZ3coszdLK5mYH7EEt` |
 
 ## Registries & Production Identifiers
+
+### Watched Heroku apps
+
+The apps heroku-ops watches. This table is the source of truth: [`factory-heroku.py`](factory-heroku.py) gives each listed app a log drain and a webhook that point at heroku-ops, and removes them from apps that aren't listed. Probe is the path heroku-ops requests every minute. Empty until heroku-ops can receive the logs.
+
+| App | Repo | URL | Probe |
+|---|---|---|---|
 
 ### Production service versions (Heroku, run locally)
 

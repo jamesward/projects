@@ -24,5 +24,6 @@ FACTORY.md holds no guidelines and no design reasoning beyond what an agent need
 - Commit to `main`; the factory routines run from it.
 - After editing a schedule table, run `./factory-routines-sync.py` (then `--apply`).
 - After changing a factory-owned file or `factory-sync.py`, run `./factory-sync.py` (report only) before `--apply`.
+- After editing the "Watched Heroku apps" table or `factory-heroku.py`, run `./factory-heroku.py --lint`. The `heroku control` routine applies the table when a PR merges (FACTORY.md "Heroku control").
 - After changing `jdk25-setup.sh`, the owner has to re-paste it into the `JDK25` environment; say so.
 - A change works once a routine run shows it working in its transcript (`./factory-transcript.py`), not before.
