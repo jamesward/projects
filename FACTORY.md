@@ -267,6 +267,7 @@ It only reports by default. `--apply` creates or updates routines to match the t
 | `jamesward/buildpack-scala` | Mon | 07:37 | `trig_012EvnVwqqisTDC6UPE8P6pr` |
 | `jamesward/buildpack-scala-native` | Tue | 07:37 | `trig_01Bwh85yjf4gHGvySvvdXGQG` |
 | `jamesward/sbta` | Thu | 07:37 | `trig_01RfwYDrrxUNq3TxCCrXwnDq` |
+| `jamesward/heroku-ops` | Fri | 07:37 | `trig_01FXYyJZ3coszdLK5mYH7EEt` |
 
 ## Registries & Production Identifiers
 
@@ -385,7 +386,9 @@ Source: https://github.com/jamesward/buildpack-scala-native
 
 ### heroku-ops
 
-The factory's production watcher: it watches the Heroku apps in this file and handles their incidents within risk rules (DESIGN.md 10-12; plan in TODO.md). A Scala/ZIO server on Heroku (app not created yet). Not yet in the schedule tables: that needs the Claude App's browser step first (`factory-repo-check.sh jamesward/heroku-ops`).
+The factory's production watcher: it watches the Heroku apps in this file and handles their incidents within risk rules (DESIGN.md 10-12; plan in TODO.md). A Scala/ZIO server on Heroku.
+
+Heroku App: jw-heroku-ops
 
 Source: https://github.com/jamesward/heroku-ops
 
