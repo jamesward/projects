@@ -212,6 +212,12 @@ heroku-ops needs each watched app to send it logs and events. [`factory-heroku.p
 - **`main` is protected** by the ruleset `main requires a pull request` (id 26425820, with no bypass actors; it also covers the throwaway branch `protection-test`). Every change to this repo reaches `main` as a PR: `./factory-land.sh "message" path...` branches, commits those files, opens the PR and squash-merges it. **Routines push with the owner's identity, so an owner bypass doesn't separate them from the owner** (2026-11-03: the on-demand routine `branch protection check (on demand)`, `trig_01B4586hRBssqCMX4hLnLHWz`, pushed to `protection-test` while the repository admin role was a bypass actor: "Bypassed rule violations"). To check the protection, run `claude -p "/schedule run trig_01B4586hRBssqCMX4hLnLHWz"` and read its transcript with `factory-transcript.py`: the push to `protection-test` must be rejected (verified 2026-11-03 after removing the bypass: the routine's push got `GH013: Repository rule violations`, and so did the owner's).
 - **Adding an app from anywhere:** edit the table in the GitHub web UI as a PR and merge it. The routine runs on the merge. The app's own routine API token (heroku-ops fires it) is a separate manual step in claude.ai and the Heroku dashboard.
 
+## heroku-ops alarm (fallback notification)
+
+When an incident can't be handed to its app's routine, heroku-ops makes its own app fail: for 30 minutes it requests its own `GET /alarm` once a second and `/alarm` answers 503. Nothing else is needed for that. The email comes from a Heroku threshold alert on `jw-heroku-ops`, which the owner sets once in the dashboard (the app needs a Standard or Performance dyno; it is on Standard-1X): app → Metrics → Threshold Alerting → Failed requests, a few percent (the alarm is about 60 requests a minute against 100 to 200 of drain and webhook traffic), sensitivity High, notify by email. `GET /health` always answers 200 and lists the undelivered incidents of the last 24 hours (`"status":"degraded"`). Details are in heroku-ops' `AGENTS.md`.
+
+Heroku Labs `log-runtime-metrics` should be on for every watched app (zen-of-projects "Production servers"). `./factory-heroku.py` reports watched apps where it is off with a `?` line and exits 0; the owner turns it on with `heroku labs:enable log-runtime-metrics -a <app>` and a restart. The `heroku control` routine's daily email includes the warning until then.
+
 ## heroku-ops MCP server
 
 heroku-ops serves a read-only MCP server at `<URL>/mcp` (URL in its entry under "Maintained Projects"), for triaging production incidents: which apps are degraded or down, the log lines behind an alert, per-minute counts, what was told to an app's routine, recent releases, a live probe. The tools are listed in the heroku-ops repo's `AGENTS.md`. Auth is `Authorization: Bearer <token>`, where the token is an HMAC of `OPS_SECRET`: `OPS_SECRET=… ./factory-heroku.py --mcp-token` prints it. Maintenance routines and you use the same server.
@@ -314,7 +320,7 @@ What each favorited Heroku app runs on (checked 2026-11-02 with `heroku apps:inf
 | `javadocs` | `jamesward/javadoccentral` | web Standard-2X ×1 | heroku-inference:claude-opus-4-5, heroku-redis:premium-1, logtail:freelancer | www.javadocs.dev |
 | `jev-llm-c4` | `jamesward/jev-llm-c4` | web Eco ×1 | none | jev-llm-c4.jamesward.dev |
 | `json-paste` | `jamesward/json-paste` | web Eco ×1 | none | none |
-| `jw-heroku-ops` | `jamesward/heroku-ops` | web Eco ×1 | none | none |
+| `jw-heroku-ops` | `jamesward/heroku-ops` | web Standard-1X ×1 | none | none |
 | `login-jamesward-dev` | `jamesward/login-jamesward-dev` | web Eco ×1 | none | login.jamesward.dev |
 | `mcp-apps-demo` | `jamesward/mcp-apps-demo` | web Eco ×1 | none | mcp-demo.jamesward.com |
 | `mcp-sample` | `jamesward/hello-spring-mcp-server` | web Eco ×1 | none | mcp-test.jamesward.com |

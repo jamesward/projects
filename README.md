@@ -130,7 +130,7 @@ flowchart TD
   fire --> routine["routine on the app's repo<br/>investigates with the ops MCP tools"]
   routine --> issue["incident issue, and a fix PR if there is one"]
   issue --> owner(["Owner approves and merges"])
-  rules -.->|"could not start the routine"| fallback["fallback notification (not chosen yet)"]
+  rules -.->|"could not start the routine"| fallback["/alarm answers 503 for 30 minutes,<br/>the app's failed-requests alert emails the owner"]
 ```
 
 The incident report is built from a fixed set of fields, truncated and quoted, because production logs contain text anyone can influence. It says what happened and never what to do. A fix is always a pull request. Nothing in the factory resizes a dyno, changes a plan or adds an add-on on its own: it works inside the limits recorded for each app, and a bigger dyno is only ever an option offered to the owner.
@@ -167,7 +167,6 @@ Live:
 
 Planned (details in [TODO.md](TODO.md)):
 - the incident procedure in the Skill, then firing the routines
-- a fallback notification channel for incidents that can't reach a routine
 - the rest of the production apps, an inventory of their dynos and add-ons in FACTORY.md, a dashboard through MCP Apps
 - letting low-risk production fixes merge without waiting for the owner
 

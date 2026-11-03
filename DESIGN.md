@@ -79,7 +79,7 @@ What heroku-ops exposes to agents is read-only: an MCP server for triage, with a
 
 ## 13. Production apps log what the factory can parse
 
-Heroku's log router splits on newlines, so a multi-line stack trace becomes many unrelated events, and counting or correlating them breaks. Server apps log one JSON event per line, with the stack trace as a field. The convention itself belongs in the zen-of-projects Skill; the reference implementation is `AppLogging.json` in javadoccentral. Heroku's own router and dyno lines are outside the apps' control, so heroku-ops parses those as they are.
+Heroku's log router splits on newlines, so a multi-line stack trace becomes many unrelated events, and counting or correlating them breaks. Server apps log one JSON event per line, with the stack trace as a field, and put the router's `X-Request-ID` on every entry made while handling a request, so a router line, the app's lines and an error join on one id. Every app also turns on Heroku's `log-runtime-metrics`, which puts memory, swap and load samples into the log stream on every dyno type (Heroku's metrics API covers only Standard and Performance dynos). The convention itself belongs in the zen-of-projects Skill; the reference implementation is `AppLogging.json` in javadoccentral. Heroku's own router and dyno lines are outside the apps' control, so heroku-ops parses those as they are.
 
 ## 14. The control plane is protected like production
 
@@ -95,6 +95,6 @@ Anything new that holds a production credential joins this list: it gets its own
 
 ## Trade-offs we accepted
 
-- **A fire is not an issue.** The alert path depends on a routine starting, which can fail on rate limits (30 fires per hour per routine, 100 per hour per account), a paused routine or the usage limit. We accept that in return for a watcher with no GitHub credentials, and cover it with a fallback notification.
+- **A fire is not an issue.** The alert path depends on a routine starting, which can fail on rate limits (30 fires per hour per routine, 100 per hour per account), a paused routine or the usage limit. We accept that in return for a watcher with no GitHub credentials, and cover it with a fallback that doesn't go through a routine: heroku-ops makes its own app fail requests (`/alarm`), which Heroku's failed-requests alert turns into an email.
 - **Full network access in the cloud environment.** Builds and tests reach Maven Central and its mirror, javadocs.dev, Docker registries and live services, so an allowlist would keep breaking runs. The cost: code a routine runs, including dependencies and tests, can reach any host. No secrets go in the environment.
 - **Latest releases instead of vulnerability alerts.** Moving every direct dependency to its latest release fixes most advisories without reading any. A vulnerable transitive dependency stays until a direct dependency's release moves it.

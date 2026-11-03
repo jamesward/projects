@@ -22,6 +22,11 @@ from HEROKU_API_KEY when it is set (local runs: `HEROKU_API_KEY=$(heroku auth:to
 factory's control routine it isn't set, and the cloud environment's network secret adds the
 Authorization header to requests to api.heroku.com, so the token never reaches the session.
 
+Each watched app is also checked, read-only, for the Heroku Labs feature log-runtime-metrics (memory,
+swap and load samples in its log stream, which heroku-ops and the owner need; zen-of-projects
+"Production servers"). An app without it gets a warning line and the exit status stays 0: turning
+it on is the owner's `heroku labs:enable log-runtime-metrics -a <app>` and a restart.
+
 Every request goes through allowed(): a short list of reads, and writes limited to log drains and
 webhooks. Nothing here can scale, resize, change config vars or touch add-ons (DESIGN.md 10).
 Exit status is 1 if any app failed.
@@ -96,6 +101,7 @@ ALLOWED = [
     ("GET", rf"^/apps/{APP}$"),
     ("GET", rf"^/apps/{APP}/log-drains$"),
     ("GET", rf"^/apps/{APP}/webhooks$"),
+    ("GET", rf"^/apps/{APP}/features/log-runtime-metrics$"),
     ("POST", rf"^/apps/{APP}/log-drains$"),
     ("DELETE", rf"^/apps/{APP}/log-drains/{ID}$"),
     ("POST", rf"^/apps/{APP}/webhooks$"),
@@ -132,6 +138,14 @@ def call(method, path, body=None):
 
 
 # ---------- desired state ----------
+
+def runtime_metrics(app):
+    """True or False for the app's log-runtime-metrics feature, None when it can't be read."""
+    try:
+        return bool(call("GET", f"/apps/{app}/features/log-runtime-metrics").get("enabled"))
+    except ApiError:
+        return None
+
 
 def secret(kind, app):
     key = os.environ["OPS_SECRET"].encode()
@@ -215,15 +229,19 @@ def main():
     def plan_for(target):
         app, wanted = target
         try:
-            return app, wanted, reconcile(app, ops_host, wanted), None
+            return app, wanted, reconcile(app, ops_host, wanted), None, runtime_metrics(app) if wanted else True
         except ApiError as e:
-            return app, wanted, [], e
+            return app, wanted, [], e, True
 
-    # Each app needs two reads and the API answers slowly through the cloud proxy, so read in parallel.
+    # Each app needs three reads and the API answers slowly through the cloud proxy, so read in parallel.
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
         planned = list(pool.map(plan_for, targets))
 
-    for app, wanted, plan, error in planned:
+    warnings = 0
+    for app, wanted, plan, error, metrics in planned:
+        if metrics is False:
+            print(f"?  {app}: log-runtime-metrics is off (owner: heroku labs:enable log-runtime-metrics -a {app}, then restart)")
+            warnings += 1
         if error:
             if wanted:
                 print(f"!! {app}: {error}")
@@ -244,7 +262,7 @@ def main():
                     print(f"!! {app}: {a} {k}: {e}")
                     failed += 1
     verb = "made" if APPLY else "needed (run with --apply)"
-    print(f"\n{changes} change(s) {verb}; {failed} app(s) failed.")
+    print(f"\n{changes} change(s) {verb}; {failed} app(s) failed; {warnings} warning(s).")
     sys.exit(1 if failed else 0)
 
 
