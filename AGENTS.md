@@ -8,6 +8,7 @@ Say each thing once, in the one place it belongs, and link to it from anywhere e
 
 | What | Where |
 |---|---|
+| What the factory is and how its parts fit together, for humans (diagrams, components, flows) | [README.md](README.md). Link to the other docs for detail; don't repeat them. |
 | Principles, and why the factory is built the way it is (decisions, trade-offs) | [DESIGN.md](DESIGN.md). When a principle changes, change it there first. |
 | How to set up and run the factory: setup steps, commands, and the operational facts an agent needs to avoid a known mistake | [FACTORY.md](FACTORY.md) |
 | The project list, schedules, registries and production identifiers | [FACTORY.md](FACTORY.md) |
