@@ -85,9 +85,9 @@ heroku-ops serves the triage tools over MCP (FACTORY.md "heroku-ops MCP server")
 - Tools worth adding once there is real data: memory and swap from the `log-runtime-metrics` lines, a longer history than the last hour (needs storage), and per-app overrides of the thresholds.
 - Mutating tools (silencing an alert, acknowledging an incident) are deliberately absent: the server is read-only (DESIGN.md 12).
 
-### MCP handshake without a token (in progress, 2026-11-03)
+### claude.ai and the MCP server
 
-claude.ai's connector check POSTs `initialize` without a token. A JSON-RPC error there made it say "Couldn't determine how this server signs in" (and "Not found 200"), while javadocs.dev gets "No sign-in (detected)". Change: `StaticBearer.aspect(..., open = StaticBearer.Handshake)` answers `initialize`, `ping`, `server/discover` and `notifications/initialized` without a token; every other request without a token gets the `-32001` error, and a wrong token is always refused. Checked locally: Claude Code shows "Connected · tools fetch failed — Not authenticated: send an Authorization: Bearer <token> header …"; the Python SDK initializes, then `tools/list` raises the error. Waiting on: merge and release of zio-http-mcp PR #74 (also adds `PythonSdkSpec`), then bump `zio-http-mcp` in heroku-ops' `build.sbt` on the branch `open-handshake` and merge. Then re-add heroku-ops in claude.ai and see whether the check now says "No sign-in (detected)", and whether the connector has a "Request headers" section (a beta for some organizations) for the bearer.
+Deployed 2026-11-03 (zio-http-mcp 0.12.2): the handshake is answered without a token and `tools/list` gets the `-32001` error. To check: re-add heroku-ops in claude.ai and see whether the check says "No sign-in (detected)" like javadocs.dev does, and whether the connector has a "Request headers" section (a beta for some organizations) for the bearer.
 
 ### Production inventory and dashboard
 
