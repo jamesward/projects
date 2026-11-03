@@ -72,6 +72,10 @@ Done: the docs, the repo skeleton (`jamesward/heroku-ops`: `GET /health`, CI) an
 6. Structured logging in the Skill and the apps; `factory-heroku.py`; the `/health` cron job.
 7. The Low tier, with the tier check and the demotion/promotion signals.
 
+### Protect `main`
+
+Decision pending: remove the bypass actor from the ruleset on `main` (FACTORY.md "Heroku control"), so only PRs reach `main` and routines can't push there. Cost: the owner's and agents' direct pushes to `jamesward/projects` stop working; every change becomes a branch, a PR and a squash merge (a small helper script), and each merge starts a short `heroku control` run. Then re-run the on-demand check (the push to `protection-test` must be rejected) and update AGENTS.md's "Commit to `main`".
+
 ### Production inventory and dashboard
 
 - **FACTORY.md should list each production app's infrastructure:** dyno type and size per process, add-ons and plans, stack and region, so routines and agents have the constraints DESIGN.md 10 relies on. Plan: a read-only `factory-heroku.py --inventory` (allowlist gains `GET /apps/{app}/formation` and `/apps/{app}/addons`; the add-on list has plans and prices, never config values) that prints the table; the `heroku control` routine's daily run could open a PR when it changes.
