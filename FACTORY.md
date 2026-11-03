@@ -200,7 +200,7 @@ Run it locally the same way after editing the factory (`./factory-sync.py`, then
 
 ## Heroku control (watched apps)
 
-heroku-ops needs each watched app to send it logs and events. [`factory-heroku.py`](factory-heroku.py) does that: it reads the "Watched Heroku apps" table (under "Registries & Production Identifiers") and gives each listed app one log drain and one app webhook that point at heroku-ops, replaces the ones whose URL changed, and removes them from apps that were dropped from the table. It touches nothing else, and only drains and webhooks that point at heroku-ops. `--lint` checks the table without a token. To run it by hand: `OPS_SECRET=… HEROKU_API_KEY=$(heroku auth:token) ./factory-heroku.py` (report), then `--apply`.
+heroku-ops needs each watched app to send it logs and events. [`factory-heroku.py`](factory-heroku.py) does that: it reads the "Watched Heroku apps" table (under "Registries & Production Identifiers") and gives each listed app one log drain and one app webhook that point at heroku-ops, replaces the ones whose URL changed, and removes them from apps that were dropped from the table. heroku-ops is in the table too, like any other app, but gets no drain: it would drain into itself. It touches nothing else, and only drains and webhooks that point at heroku-ops. `--lint` checks the table without a token. To run it by hand: `OPS_SECRET=… HEROKU_API_KEY=$(heroku auth:token) ./factory-heroku.py` (report), then `--apply`.
 
 **The `heroku control` routine** runs it, in its own cloud environment `factory-control`. It isn't in the schedule tables (like `factory sync`), so `factory-routines-sync.py` lists it as unmanaged. Why it is built this way: DESIGN.md 10 and 14.
 - **Routine:** `trig_01Tbraq3ER3yoPXhEUe8iDch`, created 2026-11-03 from `/schedule` (the account's `factory-control` environment is `env_01BvPqxR8BNw7wqCzpQPCFqX`). Source `jamesward/projects`. Email notifications only.
@@ -308,6 +308,7 @@ The apps heroku-ops watches. This table is the source of truth: [`factory-heroku
 | App | Repo | URL | Probe |
 |---|---|---|---|
 | json-paste | jamesward/json-paste | https://json-paste.herokuapp.com | / |
+| jw-heroku-ops | jamesward/heroku-ops | https://jw-heroku-ops-bd1ee276f8be.herokuapp.com | /health |
 | javadocs | jamesward/javadoccentral | https://www.javadocs.dev | / |
 
 ### Production infrastructure (Heroku)

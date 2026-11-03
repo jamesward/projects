@@ -14,7 +14,9 @@ OPS_APP below), each URL carrying the app's name and a secret derived from OPS_S
   drain    https://drain:<hmac("drain:"+app)>@<ops host>/drain?app=<app>
   webhook  https://<ops host>/hook?app=<app>, signed with hmac("hook:"+app)
 heroku-ops derives the same secrets, so it needs no per-app configuration. Drains and webhooks
-that point at heroku-ops for apps that are no longer in the table are removed. Drains and
+that point at heroku-ops for apps that are no longer in the table are removed. heroku-ops itself is
+managed like any other app (it can be in the table) with one exception: it gets no log drain, because
+it would drain into itself. Drains and
 webhooks that point anywhere else are left alone.
 
 Needs OPS_SECRET (the same value as the config var on heroku-ops). The Heroku API token comes
@@ -163,19 +165,20 @@ def mask(url):
 def reconcile(app, ops_host, wanted):
     """Plan for one app: [(action, kind, detail, thunk)]. wanted=False removes our drain/webhook."""
     plan = []
-    drain_url = f"https://drain:{secret('drain', app)}@{ops_host}/drain?app={app}" if wanted else None
+    # heroku-ops gets no drain to itself; everything else it is managed like any other app.
+    drain_url = f"https://drain:{secret('drain', app)}@{ops_host}/drain?app={app}" if wanted and app != OPS_APP else None
     hook_url = f"https://{ops_host}/hook?app={app}" if wanted else None
 
     drains = call("GET", f"/apps/{app}/log-drains") or []
     ours = [d for d in drains if host_of(d.get("url", "")) == ops_host]
     keep = None
     for d in ours:
-        if wanted and keep is None and d["url"] == drain_url and not ROTATE:
+        if drain_url and keep is None and d["url"] == drain_url and not ROTATE:
             keep = d
         else:
             plan.append(("remove", "drain", mask(d["url"]),
                          lambda d=d: call("DELETE", f"/apps/{app}/log-drains/{d['id']}")))
-    if wanted and keep is None:
+    if drain_url and keep is None:
         plan.append(("add", "drain", mask(drain_url), lambda: call("POST", f"/apps/{app}/log-drains", {"url": drain_url})))
 
     hooks = call("GET", f"/apps/{app}/webhooks") or []
@@ -222,7 +225,7 @@ def main():
     stale = []
     for a in call("GET", "/apps"):
         n = a["name"]
-        if n not in watched and n != OPS_APP and APP_NAME.match(n):
+        if n not in watched and APP_NAME.match(n):
             stale.append(n)
     targets += [(a, False) for a in sorted(stale)]
 
