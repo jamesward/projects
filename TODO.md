@@ -74,9 +74,9 @@ Done: the docs, the repo skeleton (`jamesward/heroku-ops`: `GET /health`, CI) an
 
 ### Production inventory and dashboard
 
-- **FACTORY.md should list each production app's infrastructure:** dyno type and size per process, add-ons and plans, stack and region, so routines and agents have the constraints DESIGN.md 10 relies on. Plan: a read-only `factory-heroku.py --inventory` (allowlist gains `GET /apps/{app}/formation` and `/apps/{app}/addons`; the add-on list has plans and prices, never config values) that prints the table; the `heroku control` routine's daily run could open a PR when it changes.
+- **Production infrastructure in FACTORY.md** is a hand-made snapshot from the Heroku CLI (2026-11-02). To keep it current: a read-only `factory-heroku.py --inventory` (allowlist gains `GET /apps/{app}/formation` and `/apps/{app}/addons`; plans, never config values), run by the `heroku control` routine, which opens a PR when it changes.
 - **heroku-ops exposes production metrics and a dashboard** (request rates, error counts, restarts, memory, per app), from the logs it already receives. Design still to do.
-- **Papertrail:** with the drains going to heroku-ops, the add-on can be removed to cut cost. Check first that heroku-ops keeps enough searchable history for what Papertrail is used for (recent raw error lines per incident, not full retention), then remove the add-on app by app.
+- **Log add-ons:** none of the favorited apps has Papertrail. Logtail (Better Stack) is on `javadocs` (freelancer plan) and on four `mytoolbook-*` apps (free). If heroku-ops can replace them, the cost to cut is the Logtail `freelancer` plan on `javadocs`; check first that heroku-ops keeps enough recent history for how you use it (recent error lines per incident, not full retention). `teamchimbo` runs on the retired `cedar-14` stack and has no repo in this file.
 
 ### Not verified yet
 
