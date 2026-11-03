@@ -7,7 +7,7 @@ Why the factory is built this way, and the principles every change to it follows
 2. Shared registries and production identifiers.
 3. The project list.
 
-**All guidance and conventions live in the zen-of-projects Skill** (`com.jamesward:skills`, source `~/projects/jamesward-skills`, published at https://start.jamesward.com). Project-specific facts and exceptions live in each project's `AGENTS.md`. Don't add guidelines here; add them to the Skill.
+**All guidance and conventions live in the zen-of-projects Skill** (`com.jamesward:skills`, source `~/projects/jamesward-skills`, published at https://start.jamesward.com). Project-specific facts and exceptions live in each project's `AGENTS.md`. Don't add guidelines here; add them to the Skill. [AGENTS.md](AGENTS.md) lists where everything else goes.
 
 ## Branches
 

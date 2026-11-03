@@ -39,38 +39,44 @@ Done: zen-of-projects Maintenance Routine step 8 has each run review itself and 
 - Should the evaluator also read local (non-routine) agent sessions, like the webjars one, or only routine runs?
 - How to evaluate cost (subscription usage per run) if the run logs don't expose it?
 
-## Production alerting for Heroku apps (ops routine)
+## heroku-ops: watching and fixing production apps
 
-Goal: standard alerts on every factory Heroku app, defined by the factory, that start a Claude Code **ops routine** to triage, instead of the owner noticing outages.
+Goal: every factory Heroku app is watched by one service, and an incident gets investigated and, within the risk rules, fixed without the owner noticing the outage first. Design rules: DESIGN.md 1, 10, 11, 12 (and 6 for self-improvement). Repo: `jamesward/heroku-ops` (Scala server on Heroku, built from the zen-of-projects Skill). Heroku can't call a Claude Code routine's `/fire` endpoint (no custom headers or body), so heroku-ops runs the agent itself instead of firing a routine.
 
-### What exists (checked 2026-10-16)
+### Design
 
-- **Heroku app webhooks** (`heroku webhooks:add -a <app> -i <entities> -l notify|sync -u <url> -t <authorization header> -s <hmac secret>`): HTTP POSTs on app events. Entities include `api:release`, `api:build`, `api:formation` and `dyno` (dyno state changes, likely including crashes: verify). The body is Heroku's own JSON; the only custom header is `Authorization`.
-- **Routine API trigger**: `POST https://api.anthropic.com/v1/claude_code/routines/<trig_id>/fire` with `Authorization: Bearer <routine token>`, `anthropic-beta: experimental-cc-routine-2026-04-01`, `anthropic-version: 2023-06-01`, and body `{"text": "..."}`. The text reaches the run wrapped in `<routine-fire-payload>` as untrusted data, so the routine's prompt must say to investigate it. API triggers (and their tokens) can only be added in the web UI. Research preview: shapes may change.
-- **Heroku threshold alerting** (response time and 5xx rate, from Application Metrics) only exists on professional dynos (Standard/Performance): today javadocs, webjars and webjars-file-service (Standard-2X). The rest are Basic/Eco. As far as I know it notifies by email/Dashboard, not webhook, and it's configured in the Dashboard (no CLI; check for an API).
-- **Log drains** (`heroku drains:add https://...`): every log line, including router and dyno error codes (H10 app crashed, H12 timeout, H13, R14/R15 memory, which `-XX:+ExitOnOutOfMemoryError` now turns into crashes/restarts).
+- **Watching.** An HTTPS log drain per app (router and dyno errors: H10 crashed, H12 timeout, H13, R14/R15 memory, 5xx bursts), Heroku app webhooks (`api:release`, `api:build`, `dyno`; HMAC-checked), and a URL probe per app every minute (a dead app emits no logs). Debounced per app: one incident, not one per log line. The log drain and webhooks need no Heroku credentials.
+- **Agent.** `kiro-cli acp` with `KIRO_API_KEY` (headless mode), driven through [zio-acp](https://github.com/jamesward/zio-acp) the way zio-evals' `AcpAgentLoop` does it. It runs in a clone of the app's repo, so that repo's `.kiro/settings/mcp.json` and skills apply. Scrubbed environment, a tool policy (not allow-everything), a temporary working directory.
+- **Credentials.** A GitHub App of its own: the agent's token pushes `claude/` branches and opens PRs; a separate merge token stays in heroku-ops code. No Heroku write credentials anywhere. Branch protection on the apps' default branches.
+- **Tiers.** Low: revert of the causing merge, or a small test-covered fix; merges after green CI. High: everything else, PR plus `needs-human` issue, the owner merges. A script decides the tier (forced High list in DESIGN.md 11). Each app starts High-only; `AGENTS.md` opts in.
+- **Validation.** In the app repo's CI, not on the dyno (a Basic dyno can't build Scala and run an agent). Low needs green CI.
+- **Reminders.** A High PR is reported again after 4 hours while the app is still unhealthy; otherwise the daily digest covers it.
+- **Incident record and self-improvement.** DESIGN.md 6. The agent's instructions are a Skill (`zen-of-ops`) in `jamesward/skills`, delivered through the `com.jamesward:skills` dependency.
+- **Watching the watcher.** A GitHub Actions cron job checks `/health` every 15 minutes and opens a findings issue if it fails. heroku-ops is a managed repo with its own maintenance routine.
+- **Factory side.** `factory-heroku.py` (like `factory-github-settings.py`) checks each Heroku app listed in FACTORY.md for its drain, webhook and probe entry, the buildpacks rule, and `JAVA_TOOL_OPTIONS` for non-Scala JVM apps, and reports drift as a findings issue.
 
-### The gap
+### Build order
 
-Heroku can't call `/fire` directly: it can't send the `anthropic-beta`/`anthropic-version` headers or a `{"text": ...}` body. So we need a small **relay**: receives Heroku webhooks (verify `Heroku-Webhook-Hmac-SHA256`) and/or an HTTPS log drain, filters (crash, H1x/R1x bursts, failed release), debounces per app (one fire per incident, not per log line), and POSTs `/fire` with a summary (app, event, recent error lines, last release). Options: a tiny service on Heroku itself (then it can't report its own outage), or something outside Heroku (AWS Lambda behind a function URL, Cloudflare Worker). The relay holds the routine token as a secret.
+1. Docs (this section, DESIGN.md) and the repo skeleton.
+2. A watcher with no agent: drain, webhooks, probes, debounce, and an incident issue per incident. Catches outages with no AI cost.
+3. Triage only: the agent investigates and writes up the issue.
+4. High-tier fix PRs.
+5. The Low tier, and the demotion/promotion signals.
+6. `factory-heroku.py`, the `/health` cron job, and registering heroku-ops as a managed repo (browser step for the Claude App).
 
-### Factory-defined standard alerts (sketch)
+### Not verified yet
 
-- A `factory-heroku.py` (like `factory-github-settings.py`): reads the Heroku apps in FACTORY.md, reports/fixes drift: the relay webhook (`dyno,api:release,api:build`), the relay log drain, the buildpacks rule (zen-of-projects "Heroku deploys"), `JAVA_TOOL_OPTIONS` ExitOnOutOfMemoryError for non-Scala JVM apps, and threshold alerts where the dyno tier supports them (reported only, if there's no API).
-- Optionally an uptime check: a URL per app in FACTORY.md, probed by the relay on a schedule, since a dead app that emits no events alerts nothing.
-
-### The ops routine (to design)
-
-- One routine (`ops`) on `jamesward/projects`, API trigger only. Prompt: investigate the incident in the `routine-fire-payload` block; find the app's repo from FACTORY.md (`add_repo`); correlate with the last release/merge and the PR that caused it; check the production URL.
-- Output: an issue in the app's repo labeled `needs-human` and `incident` with the evidence and a proposed fix (or a fix PR, never merged automatically), plus the routine's email. It must not roll back, restart or change config on its own, at least at first.
-- Heroku access: routines have no Heroku credentials, and environment variables are visible to anyone using the environment. Options: the relay includes recent log lines and release info in the fire text (no credentials in the routine), or a separate cloud environment for ops with a read-scoped token (`heroku authorizations:create --scope read`; check whether logs need more than `read`).
+- `kiro-cli` on a Heroku dyno (installing it during the build), its memory use, and what Kiro charges for API-key usage this way.
+- How ACP permission requests behave under a restricted tool policy (`AcpAgentLoop` allows the first option every time).
+- Whether the `dyno` webhook fires on crashes and R14/R15 restarts (the log drain makes this less important).
+- Log volume from webjars through one drain on a Basic dyno.
+- Heroku threshold alerts (response time, 5xx rate) exist only on Standard/Performance dynos and, as far as I know, notify by email or the Dashboard, not by webhook. Not planned.
 
 ### Open questions
 
-- Which Heroku events really signal "down": does the `dyno` webhook fire on crashes and R14/R15 restarts?
-- Where the relay runs, and who watches the relay.
-- Debounce and rate limits: routine runs count against the subscription (100 scheduled runs/hour; check API-trigger limits).
-- Pricing: threshold alerts need professional dynos; log volume for a drain.
+- **Urgent notification channel.** GitHub notifications from the App identity, email through an add-on, or push? A production outage may deserve more than a GitHub notification, and the choice is hard. Unresolved.
+- Limits on rate and cost: how many agent runs a bad day could start. Cap the fires per hour and merge simultaneous incidents into one report.
+- Where heroku-ops keeps state (open incidents, debounce): memory only (lost on restart), or a small add-on.
 
 ## Hill climbing and open-ended tasks (later)
 
@@ -78,7 +84,7 @@ Goal: start open-ended work on one project (improve a metric, explore a change) 
 
 ### What exists (checked 2026-10-30)
 
-- Starting runs: a routine's schedule, `RemoteTrigger` `run` (used to re-run routines on 2026-10-30), the `/fire` API with a text payload (see the ops routine section), or an interactive `claude --cloud` session.
+- Starting runs: a routine's schedule, `RemoteTrigger` `run` (used to re-run routines on 2026-10-30), the routines `/fire` API with a text payload (API triggers can only be added in the web UI), or an interactive `claude --cloud` session.
 - Hard limits: the number of runs started, the routine's model (Sonnet is the default; Opus uses much more quota), and `claude -p --max-budget-usd` (print mode only; probably only meaningful with an API key, untested with subscription login). An API key with a Console spend limit gives a hard dollar cap, billed separately.
 - No per-run token or dollar cap for routines, and no `--max-turns` in the CLI. Inside a run, only the prompt limits it, which is soft. Routines share the 5-hour and weekly pool with interactive Claude Code and claude.ai, so a runaway climb can lock out your own work.
 
