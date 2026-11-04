@@ -28,7 +28,9 @@ compared with the canonical factory files:
                              watched Heroku apps (FACTORY.md's table); no credentials in the files
   .github/dependabot.yml     must not exist
   line endings               files stored as their .gitattributes say (no diff in a fresh clone)
-  labels                     needs-human, incident and factory-improvement must exist
+  labels                     needs-human, incident, ci-red and factory-improvement must exist
+  red CI on the default branch  an issue in that repo, labeled ci-red (not needs-human): the repo's
+                             next maintenance run fixes it; closed once the branch is green
 
 AGENTS.md and everything else are left to each repo's maintenance routine. --apply commits to the
 bot-owned branch claude/factory-sync, opens or updates one PR titled 'Factory sync: ...', and
@@ -99,6 +101,8 @@ LABELS = [{"name": "needs-human", "color": "B60205",
            "description": "The maintenance routine needs a maintainer decision"},
           {"name": "incident", "color": "D93F0B",
            "description": "A production incident reported by heroku-ops"},
+          {"name": "ci-red", "color": "E99695",
+           "description": "The default branch's CI is failing; the next maintenance run fixes it first"},
           {"name": "factory-improvement", "color": "0E8A16",
            "description": "Proposed by a maintenance routine run; needs a maintainer to review"}]
 
@@ -637,10 +641,12 @@ def ci_finding(repo):
     if not bad and not bad_status:
         return None, True
     names = ", ".join([f"`{r['name']}`" for r in bad] + [f"`{s['context']}`" for s in bad_status])
-    return (key, f"CI is failing on {repo}'s default branch",
-            f"The latest commit on `{branch}` of `{repo}` ([{sha[:7]}](https://github.com/{repo}/commit/{sha})) has failing checks: {names}.\n\n"
-            f"See [the runs](https://github.com/{repo}/actions?query=branch%3A{branch}). A merge that holds only routine changes "
-            "shouldn't leave the default branch red: look at what the last maintenance PR changed.", ), True
+    return (key, f"CI is failing on {branch}",
+            f"The latest commit on `{branch}` ([{sha[:7]}](https://github.com/{repo}/commit/{sha})) has failing checks: {names}. "
+            f"See [the runs](https://github.com/{repo}/actions?query=branch%3A{branch}).\n\n"
+            "The maintenance routine fixes this first (zen-of-projects step 9, `ci-red` issues): read the failed job's log. "
+            "A transient failure (a download, network or runner error, with the commit's PR checks green) only needs the failed "
+            "jobs re-run. Anything else gets a fix on its own branch, under step 9's merge rules."), True
 
 
 def findings(repos, failures, sync_prs):
@@ -675,10 +681,53 @@ def findings(repos, failures, sync_prs):
             "\n\nOpen the repo's latest maintenance PR for the link to its run, or merge the sync PR by hand.")
     f, complete = settings_finding()
     add(f, complete, "settings")
-    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
-        for repo, (f, complete) in zip(repos, pool.map(ci_finding, repos)):
-            add(f, complete, f"ci-red:{repo}")
+    checked.update(f"ci-red:{repo}" for repo in repos)  # moved to the repos themselves (sync_ci_issues)
     return found, checked
+
+
+def sync_ci_issues(repos, apply):
+    """Red CI on a repo's default branch is that repo's problem, for its own maintenance run to fix: one open issue in the repo,
+    labeled ci-red (not needs-human, which step 9 skips), opened or updated while the branch is red and closed once it's green."""
+    print("\n## Red CI (issues in the repos, labeled ci-red)")
+    verb = (lambda v: v) if apply else (lambda v: f"would {v}")
+
+    def one(repo):
+        f, complete = ci_finding(repo)
+        key = f"ci-red:{repo}"
+        try:
+            open_ = [i for i in gh(f"repos/{repo}/issues?state=open&labels=ci-red&per_page=20") or []
+                     if "pull_request" not in i and MARKER % key in (i.get("body") or "")]
+        except Exception as e:
+            return f"!! {repo}: couldn't read its issues: {e}"
+        if f:
+            _, title, body = f
+            body = (f"{body}\n\nOpened and kept current by the daily factory sync (`factory-sync.py` in jamesward/projects), "
+                    f"which closes it once `{title.split()[-1]}` is green.\n\n{MARKER % key}")
+            if not open_:
+                if apply:
+                    ensure_label(repo, True)
+                    i = gh(f"repos/{repo}/issues", "POST", {"title": title, "body": body, "labels": ["ci-red"]})
+                    return f"+  {repo}#{i['number']}: {title}"
+                return f"+  {verb('open')} {repo}: {title}"
+            i = open_[0]
+            if i["title"] != title or (i.get("body") or "").replace("\r\n", "\n") != body:
+                if apply:
+                    gh(f"repos/{repo}/issues/{i['number']}", "PATCH", {"title": title, "body": body})
+                return f"*  {verb('update')} {repo}#{i['number']}: {title}"
+            return f"=  {repo}#{i['number']}: {title}"
+        if open_ and complete:
+            if apply:
+                for i in open_:
+                    gh(f"repos/{repo}/issues/{i['number']}/comments", "POST", {"body": "The default branch's CI is green again; closing."})
+                    gh(f"repos/{repo}/issues/{i['number']}", "PATCH", {"state": "closed", "state_reason": "completed"})
+            return f"-  {verb('close')} {repo}#{open_[0]['number']}: green again"
+        if open_:
+            return f"?  {repo}#{open_[0]['number']}: couldn't check this run, left open"
+        return None
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+        lines = [l for l in pool.map(one, repos) if l]
+    print("\n".join(lines) if lines else "none")
 
 
 def sync_issues(found, checked, apply):
@@ -852,6 +901,10 @@ def main():
             sync_issues(*findings(repos, failures, sync_prs), apply)
         except Exception as e:
             print(f"!! findings: {e}")
+        try:
+            sync_ci_issues(repos, apply)
+        except Exception as e:
+            print(f"!! red CI issues: {e}")
     digest_and_weekly(repos)
     run("rm", "-rf", str(work), check=False)
 

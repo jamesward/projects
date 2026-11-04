@@ -181,7 +181,8 @@ The guidance is the "Website Projects" section of zen-of-projects. Static sites 
 - `settings`: GitHub settings that differ, including Dependabot alerts turned off (`factory-github-settings.py`'s check; fix with its `--apply` locally).
 - `sync-failed:<repo>`: the sync failed on a repo (`!!`), with the error.
 - `stale-sync-prs`: `Factory sync:` PRs open more than 7 days, so the repos' maintenance runs aren't merging them.
-- `ci-red:<repo>`: the latest commit on a repo's default branch has failing checks (a merge that broke CI). Checks still running, none at all, or an unreadable repo leave an open issue as it is.
+
+**Red CI goes to the repo, not here.** The same run checks the latest commit on each managed repo's default branch. When its checks failed, the run keeps one issue open in that repo, titled `CI is failing on <branch>` and labeled `ci-red` (not `needs-human`), so the repo's next maintenance run fixes it first (zen-of-projects step 9); it closes the issue with a comment once the branch is green. Checks still running, none at all, or an unreadable repo leave an open issue as it is. The "## Red CI" section of the output lists them.
 
 Without `--apply` the script prints what it would open, update or close. It only checks what a script can decide; findings that need judgment are for the evaluator in TODO.md.
 
