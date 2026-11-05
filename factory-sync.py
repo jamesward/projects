@@ -58,6 +58,7 @@ import datetime as dt
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -374,6 +375,18 @@ def ensure_label(repo, apply):
     return [f"create the {l['name']} label" for l in missing]
 
 
+def push(d):
+    """Force-push the bot-owned branch, retrying the remote's transient failures (HTTP 5xx, "fatal error in commit_refs")."""
+    for attempt in range(4):
+        r = run("git", "push", "-q", "--force", "origin", f"HEAD:refs/heads/{BRANCH}", cwd=d, check=False)
+        if r.returncode == 0:
+            return
+        err = (r.stderr or r.stdout).strip()
+        if attempt == 3 or not re.search(r"Internal Server Error|commit_refs|HTTP 5\d\d|\(failure\)|timed out", err):
+            raise RuntimeError(f"git push -q --force origin HEAD:refs/heads/{BRANCH}: {err}")
+        time.sleep(15 * (attempt + 1))
+
+
 def open_pr(repo):
     owner = repo.split("/")[0]
     prs = gh(f"repos/{repo}/pulls?state=open&head={owner}:{BRANCH}")
@@ -580,6 +593,7 @@ def digest(repos):
 FINDINGS_REPO = "jamesward/projects"
 MARKER = "<!-- factory-finding: %s -->"
 STALE_SYNC_DAYS = 7
+RETRY_PASS_DELAY = 180
 
 
 def load_settings():
@@ -659,13 +673,16 @@ def findings(repos, failures, sync_prs):
         if complete or f:
             checked.add(key)
 
-    for repo in repos:
-        key = f"sync-failed:{repo}"
-        checked.add(key)
-        if repo in failures:
-            found[key] = (f"Factory sync failed for {repo}",
-                          f"`factory-sync.py` failed on `{repo}`:\n\n```\n{failures[repo][:3000]}\n```\n\n"
-                          f"Reproduce locally with `./factory-sync.py {repo}`.")
+    # One issue for every repo the sync failed on (after its retry), not one per repo: a GitHub outage fails many at once.
+    checked.update(f"sync-failed:{repo}" for repo in repos)  # the per-repo issues of earlier versions get closed
+    checked.add("sync-failed")
+    failed = [r for r in repos if r in failures]
+    if failed:
+        found["sync-failed"] = (
+            f"Factory sync failed on {len(failed)} repo(s)",
+            "`factory-sync.py` failed on these repos twice in one run (each failure is retried once, a few minutes "
+            "later):\n\n" + "\n\n".join(f"**{r}**\n```\n{failures[r][:1500]}\n```" for r in failed) +
+            "\n\nThe next run tries again. Reproduce locally with `./factory-sync.py <owner/repo>`.")
     now = time.time()
     stale = []
     for repo, (number, created) in sorted(sync_prs.items()):
@@ -795,9 +812,20 @@ def main():
     boot = bootstrap()
     pending_prs = []
     failures, sync_prs = {}, {}  # repo -> error; repo -> (open sync PR number, created_at)
-    drifted = 0
+    drifted = set()
     work = Path(tempfile.mkdtemp(prefix="factory-sync-"))
-    for repo in repos:
+    # GitHub's git and API endpoints fail in bursts (2026-11-04: 16 repos got "Internal Server Error" on push within
+    # 7 minutes). A repo that fails goes to the end of the queue for one more try, a few minutes later; only what
+    # fails twice is a finding.
+    queue, retried, waited = list(repos), set(), False
+    for repo in queue:
+        if repo in retried and not waited:
+            print(f"\nRetrying {len(retried)} repo(s) that failed, after {RETRY_PASS_DELAY}s: {', '.join(sorted(retried))}")
+            time.sleep(RETRY_PASS_DELAY)
+            waited = True
+        if repo in retried:
+            failures.pop(repo, None)
+            shutil.rmtree(work / repo.replace("/", "__"), ignore_errors=True)
         try:
             info = gh(f"repos/{repo}")
             if info.get("archived"):
@@ -817,7 +845,7 @@ def main():
                 if pr and merge:
                     pending_prs.append((repo, pr["number"]))
                 continue
-            drifted += 1
+            drifted.add(repo)
             print(f"~  {repo} ({kind}):" + "".join(f"\n     - {c}" for c in changes + label))
             if not apply:
                 continue
@@ -827,7 +855,7 @@ def main():
             body_lines = "\n".join(f"- {c}" for c in changes)
             run("git", "commit", "-q", "-m", msg[:72], "-m", body_lines, cwd=d)  # the environment's git identity
             # The branch is owned by this script and always rebuilt from the default branch.
-            run("git", "push", "-q", "--force", "origin", f"HEAD:refs/heads/{BRANCH}", cwd=d)
+            push(d)
             body = (f"Synced from the factory ([jamesward/projects](https://github.com/jamesward/projects)) by "
                     f"`factory-sync.py`. Changes:\n\n{body_lines}\n\n"
                     "Only factory-owned files and entries change; it doesn't run the maintenance routine. It merges "
@@ -837,13 +865,24 @@ def main():
                 gh(f"repos/{repo}/pulls/{pr['number']}", "PATCH", {"title": msg[:72], "body": body})
                 number = pr["number"]
             else:
-                number = gh(f"repos/{repo}/pulls", "POST",
-                            {"title": msg[:72], "head": BRANCH, "base": default, "body": body})["number"]
+                try:
+                    number = gh(f"repos/{repo}/pulls", "POST",
+                                {"title": msg[:72], "head": BRANCH, "base": default, "body": body})["number"]
+                except RuntimeError:
+                    # gh() retries a 5xx, and a POST that did succeed the first time then answers 422
+                    # ("A pull request already exists"): use the PR that is there.
+                    again = open_pr(repo)
+                    if not again:
+                        raise
+                    number = again["number"]
             print(f"   PR #{number}: https://github.com/{repo}/pull/{number}")
             pending_prs.append((repo, number))
         except Exception as e:  # report and continue with the other repos
             print(f"!! {repo}: {e}")
             failures[repo] = str(e)
+            if repo not in retried:
+                retried.add(repo)
+                queue.append(repo)
 
     if apply and not merge and pending_prs:
         print(f"\n{len(pending_prs)} PR(s) opened or updated, not merged (--no-merge).")
@@ -893,7 +932,7 @@ def main():
             if waiting:
                 time.sleep(30)
 
-    print(f"\n{drifted} of {len(repos)} repo(s) drifted." + ("" if apply or not drifted else " Run with --apply to fix."))
+    print(f"\n{len(drifted)} of {len(repos)} repo(s) drifted." + ("" if apply or not drifted else " Run with --apply to fix."))
     if args:
         print("\n(Findings issues are only synced when every managed repo is checked.)")
     else:
