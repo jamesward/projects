@@ -27,6 +27,7 @@ compared with the canonical factory files:
   heroku-ops MCP server      in .mcp.json, .kiro/settings/mcp.json and .claude/settings.json of the repos of the
                              watched Heroku apps (FACTORY.md's table); no credentials in the files
   .github/dependabot.yml     must not exist
+  .factory/skills/zen-of-projects/SKILL.md  removed once jamesward/skills main has had that exact version (a stale test copy)
   line endings               files stored as their .gitattributes say (no diff in a fresh clone)
   labels                     needs-human, incident, ci-red and factory-improvement must exist
   red CI on the default branch  an issue in that repo, labeled ci-red (not needs-human): the repo's
@@ -159,6 +160,21 @@ def skill_text():
             return (Path(t) / SKILL_PATH).read_text()
     req = urllib.request.Request(SKILL_URL, headers={"User-Agent": "factory-sync"})
     return urllib.request.urlopen(req, timeout=60).read().decode()
+
+
+TEST_SKILL_COPY = ".factory/skills/zen-of-projects/SKILL.md"
+_skill_blobs = None
+
+
+def published_skill_blobs():
+    """Git blob ids of every version of the zen-of-projects SKILL.md that jamesward/skills main has had."""
+    global _skill_blobs
+    if _skill_blobs is None:
+        with tempfile.TemporaryDirectory() as t:
+            run("git", "clone", "-q", "--bare", SKILLS_REPO, t)
+            out = run("git", "rev-list", "--objects", "HEAD", "--", SKILL_PATH, cwd=t).stdout
+            _skill_blobs = {l.split()[0] for l in out.splitlines() if l.endswith(" " + SKILL_PATH)}
+    return _skill_blobs
 
 
 def bootstrap():
@@ -294,6 +310,18 @@ def desired_files(repo, d, boot):
         if (d / f).exists():
             (d / f).unlink()
             changes.append(f"remove {f} (the routine keeps dependencies current)")
+
+    # A test copy of an unreleased Skill (FACTORY.md "Testing an unreleased Skill") is stale once jamesward/skills main
+    # has had exactly that content: from then on it only holds the routine back from newer Skill versions.
+    copy = d / TEST_SKILL_COPY
+    if copy.exists():
+        blob = run("git", "hash-object", str(copy), cwd=d).stdout.strip()
+        if blob in published_skill_blobs():
+            copy.unlink()
+            for parent in (copy.parent, copy.parent.parent):
+                if parent.exists() and not any(parent.iterdir()):
+                    parent.rmdir()
+            changes.append(f"remove {TEST_SKILL_COPY} (a version jamesward/skills main already had; the routine reads the released Skill)")
 
     if repo in CUSTOM_MAINTENANCE or kind == "site":
         return kind, changes
