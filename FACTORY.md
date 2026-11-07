@@ -106,7 +106,7 @@ Requires a claude.ai login, not an API key or Bedrock. First make sure that:
 - the repo's `.factory/MAINTENANCE.md` and `AGENTS.md` are pushed to its default branch, because the routine clones from GitHub, not your checkout;
 - the browser App step from step 1 is done.
 
-Then add the repo to one of the tables in "Managed Repos & Schedules" and run `~/projects/projects/factory-routines-sync.py --apply`. The script creates the routine with the standard name, prompt, `JDK25` environment and no connectors. The server attaches every claude.ai connector to a new routine, and the script removes them.
+Then add the repo to one of the tables in "Managed Repos & Schedules" and run `~/projects/projects/factory-routines-sync.py --apply`. The script creates the routine with the standard name, prompt, `JDK25` environment and no connectors. The standard prompt (`PROMPT` in the script) points the run at `.factory/MAINTENANCE.md` and carries the owner's authorization to merge the PR it opens and the repo's `claude/factory-sync` PR with `mcp__github__merge_pull_request` (DESIGN.md 15): a run that read the instruction only from a file once declined to merge, and the classifier denies a merge made through Bash. After changing `PROMPT`, run `--apply` (all routines, about 15 minutes) and run one routine on demand to see it work. The server attaches every claude.ai connector to a new routine, and the script removes them.
 - Pick a time a few minutes past the hour, and stagger repos so they don't all hit Maven Central at once.
 - sbt repos get the javadocs.dev tools through `sbta`. Maven and Gradle repos get them from the `javadocs` server in `.mcp.json`.
 
