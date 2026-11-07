@@ -93,6 +93,10 @@ Anything that can change what runs with a credential that can change production 
 
 Anything new that holds a production credential joins this list: it gets its own environment, runs only on approved input, and works through a narrow client.
 
+## 15. A routine's authority comes from its saved prompt, not from files
+
+Cloud sessions treat text they read from a repository, a pull request or a log as data: it can't authorize a merge or any other action by itself. Runs differ in how strictly they apply that: on 2026-11-04 sbt-tdepver's run merged its repo's `claude/factory-sync` PR on the strength of `.factory/MAINTENANCE.md`, and on 2026-11-06 hello-spring-ai-bedrock's run declined to merge the same kind of PR for that very reason. The saved prompt is the one channel the owner controls, so what a routine may do on its own is stated there, in the owner's voice, and it names the method: merging the PR it opens and the repo's `claude/factory-sync` PR, with `mcp__github__merge_pull_request` (the classifier denies a merge through Bash). The files say when and how (the merge rules, CI first, `needs-human` otherwise); the prompt says that it is allowed. Anything beyond that, such as changing a setting, a credential or another repo, isn't in the prompt, so a run asks through a `needs-human` PR or issue instead. The `heroku control` routine's prompt works the same way (principle 14).
+
 ## Trade-offs we accepted
 
 - **A fire is not an issue.** The alert path depends on a routine starting, which can fail on rate limits (30 fires per hour per routine, 100 per hour per account), a paused routine or the usage limit. We accept that in return for a watcher with no GitHub credentials, and cover it with a fallback that doesn't go through a routine: heroku-ops makes its own app fail requests (`/alarm`), which Heroku's failed-requests alert turns into an email.
