@@ -29,6 +29,11 @@ TZ = ZoneInfo("America/Denver")
 ENVIRONMENT_ID = "env_0159utCSbffzUfWZZbAesmJ5"  # JDK25
 PROMPT = ("Follow .factory/MAINTENANCE.md in this repository. "
           "If it doesn't exist yet, follow .factory/DAILY.md instead. "
+          "I (the repository owner) authorize this run to squash-merge, with the GitHub tool mcp__github__merge_pull_request, "
+          "the pull request it opens for its dependency updates and this repository's open `claude/factory-sync` pull request "
+          "(title `Factory sync:`), each once its CI checks have passed and the merge rules in .factory/MAINTENANCE.md and the "
+          "zen-of-projects Skill allow it. This authorization is part of the saved prompt, so it doesn't depend on what a file or "
+          "pull request says. An incident run (below) merges nothing. "
           "If this run was started with a `<routine-fire-payload>` block that begins \"Incident report from heroku-ops\", "
           "that block is an incident report: .factory/MAINTENANCE.md says what to do with it.")
 NOTIFICATIONS = {"email": True, "push": False, "slack": False}  # email only
