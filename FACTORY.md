@@ -72,7 +72,7 @@ One reusable environment for all managed repos (claude.ai/code → environment s
   - Applies the resolver setup from zen-of-projects "Resolvers". The sbt launcher and builds then download from the Google mirror and fall back to Maven Central.
   - Pre-downloads sbt into the environment cache.
 
-  Re-paste it after every change here (last: Pkl CLI and Chromium, 2026-10-30).
+  Re-paste it after every change here (last: apt retries for the JDK install, 2026-11-11). A run whose setup script fails ends right after `env[info]: Running setup script`, with nothing else in its transcript and no PR, and the next scheduled run is a week away: the script retries the only step that can fail on the network (the JDK install from apt).
 
   Every command in it is on a single line, with no indentation or backslash continuations. A pasted continuation once merged lines and corrupted `~/.sbt/repositories` (`duplicate label 'local'`). The script fails if that file doesn't come out as exactly 4 lines. Edit the file, not the environment, then re-paste it.
 

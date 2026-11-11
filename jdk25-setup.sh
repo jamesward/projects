@@ -2,7 +2,9 @@
 # Every command is on one line (no backslash continuations) so pasting can't merge lines.
 
 # --- Java 25 (the base image only has OpenJDK 21) ---
-apt-get update -qq && apt-get install -y -qq openjdk-25-jdk-headless || exit 1
+# Retried: a failed apt mirror fetch is transient, but exiting here fails the whole run before Claude starts (mcp-apps-demo, 2026-11-10).
+for i in 1 2 3 4; do apt-get update -qq && apt-get install -y -qq openjdk-25-jdk-headless && break; echo "apt attempt $i failed; retrying in $((i * 15))s"; sleep $((i * 15)); done
+[ -x /usr/lib/jvm/java-25-openjdk-amd64/bin/java ] || { echo "ERROR: openjdk-25-jdk-headless did not install after 4 attempts"; exit 1; }
 update-alternatives --set java /usr/lib/jvm/java-25-openjdk-amd64/bin/java || true
 java -version
 
