@@ -211,9 +211,16 @@ def agents_md(d):
     return []
 
 
+# AGENTS.md text that still describes sbt-mcp: its name (and its stdio bridge `.claude/sbt-mcp-stdio.sh` and
+# `/tmp/sbt-mcp-*.log`), its `mcpPort` setting, or a loopback port next to the MCP server (`sbta` at
+# `http://127.0.0.1:5106/`). Hand-written sections like these don't match FACTORY_MCP_BULLET.
+LEFTOVER = re.compile(r"sbt-mcp|mcpPort|\b(?:sbta|mcp)\b.*127\.0\.0\.1:\d+|127\.0\.0\.1:\d+.*\b(?:sbta|mcp)\b", re.I)
+
+
 def agents_leftovers(d):
-    """AGENTS.md lines that still describe sbt-mcp (for the report; the routine's Align step rewrites them)."""
+    """(line number, line) of each AGENTS.md line that still describes sbt-mcp. factory-sync.py files them as an
+    issue in the repo; the repo's maintenance run rewrites them (zen-of-projects step 5, Align)."""
     p = Path(d) / "AGENTS.md"
     if not p.exists():
         return []
-    return [l for l in p.read_text().splitlines() if re.search(r"sbt-mcp|mcpPort|sbt-mcp-stdio", l)]
+    return [(n, l) for n, l in enumerate(p.read_text().splitlines(), 1) if LEFTOVER.search(l)]

@@ -32,8 +32,12 @@ compared with the canonical factory files:
   labels                     needs-human, incident, ci-red and factory-improvement must exist
   red CI on the default branch  an issue in that repo, labeled ci-red (not needs-human): the repo's
                              next maintenance run fixes it; closed once the branch is green
+  AGENTS.md describing sbt-mcp  sbt repos: an issue in that repo listing the lines (factory_sbta.LEFTOVER) that
+                             the bullet rewrite didn't catch; the repo's next maintenance run rewrites them;
+                             closed once none are left
 
-AGENTS.md and everything else are left to each repo's maintenance routine. --apply commits to the
+AGENTS.md and everything else are left to each repo's maintenance routine (only the factory-written MCP
+bullet is rewritten). --apply commits to the
 bot-owned branch claude/factory-sync, opens or updates one PR titled 'Factory sync: ...', and
 squash-merges it once its CI checks have run and passed (not with --no-merge: the daily routine
 uses it because auto mode denies its merges, so each repo's maintenance run merges the PR after CI,
@@ -730,48 +734,88 @@ def findings(repos, failures, sync_prs):
     return found, checked
 
 
+def sync_repo_issue(repo, key, f, complete, apply, until, closing, label=None):
+    """Keep one issue in the repo itself for a finding that repo's own maintenance run fixes: opened or updated while f
+    ((title, body)) holds, closed with the comment `closing` once the run could check (complete) and f is None.
+    Returns a report line, or None when there is nothing to say."""
+    verb = (lambda v: v) if apply else (lambda v: f"would {v}")
+    try:
+        open_ = [i for i in gh(f"repos/{repo}/issues?state=open&per_page=100" + (f"&labels={label}" if label else "")) or []
+                 if "pull_request" not in i and MARKER % key in (i.get("body") or "")]
+    except Exception as e:
+        return f"!! {repo}: couldn't read its issues: {e}"
+    if f:
+        title, body = f
+        body = (f"{body}\n\nOpened and kept current by the daily factory sync (`factory-sync.py` in jamesward/projects), "
+                f"which closes it once {until}.\n\n{MARKER % key}")
+        if not open_:
+            if apply:
+                if label:
+                    ensure_label(repo, True)
+                i = gh(f"repos/{repo}/issues", "POST",
+                       {"title": title, "body": body, **({"labels": [label]} if label else {})})
+                return f"+  {repo}#{i['number']}: {title}"
+            return f"+  {verb('open')} {repo}: {title}"
+        i = open_[0]
+        if i["title"] != title or (i.get("body") or "").replace("\r\n", "\n") != body:
+            if apply:
+                gh(f"repos/{repo}/issues/{i['number']}", "PATCH", {"title": title, "body": body})
+            return f"*  {verb('update')} {repo}#{i['number']}: {title}"
+        return f"=  {repo}#{i['number']}: {title}"
+    if open_ and complete:
+        if apply:
+            for i in open_:
+                gh(f"repos/{repo}/issues/{i['number']}/comments", "POST", {"body": closing})
+                gh(f"repos/{repo}/issues/{i['number']}", "PATCH", {"state": "closed", "state_reason": "completed"})
+        return f"-  {verb('close')} {repo}#{open_[0]['number']}: {closing}"
+    if open_:
+        return f"?  {repo}#{open_[0]['number']}: couldn't check this run, left open"
+    return None
+
+
 def sync_ci_issues(repos, apply):
     """Red CI on a repo's default branch is that repo's problem, for its own maintenance run to fix: one open issue in the repo,
     labeled ci-red (not needs-human, which step 9 skips), opened or updated while the branch is red and closed once it's green."""
     print("\n## Red CI (issues in the repos, labeled ci-red)")
-    verb = (lambda v: v) if apply else (lambda v: f"would {v}")
 
     def one(repo):
         f, complete = ci_finding(repo)
-        key = f"ci-red:{repo}"
-        try:
-            open_ = [i for i in gh(f"repos/{repo}/issues?state=open&labels=ci-red&per_page=20") or []
-                     if "pull_request" not in i and MARKER % key in (i.get("body") or "")]
-        except Exception as e:
-            return f"!! {repo}: couldn't read its issues: {e}"
-        if f:
-            _, title, body = f
-            body = (f"{body}\n\nOpened and kept current by the daily factory sync (`factory-sync.py` in jamesward/projects), "
-                    f"which closes it once `{title.split()[-1]}` is green.\n\n{MARKER % key}")
-            if not open_:
-                if apply:
-                    ensure_label(repo, True)
-                    i = gh(f"repos/{repo}/issues", "POST", {"title": title, "body": body, "labels": ["ci-red"]})
-                    return f"+  {repo}#{i['number']}: {title}"
-                return f"+  {verb('open')} {repo}: {title}"
-            i = open_[0]
-            if i["title"] != title or (i.get("body") or "").replace("\r\n", "\n") != body:
-                if apply:
-                    gh(f"repos/{repo}/issues/{i['number']}", "PATCH", {"title": title, "body": body})
-                return f"*  {verb('update')} {repo}#{i['number']}: {title}"
-            return f"=  {repo}#{i['number']}: {title}"
-        if open_ and complete:
-            if apply:
-                for i in open_:
-                    gh(f"repos/{repo}/issues/{i['number']}/comments", "POST", {"body": "The default branch's CI is green again; closing."})
-                    gh(f"repos/{repo}/issues/{i['number']}", "PATCH", {"state": "closed", "state_reason": "completed"})
-            return f"-  {verb('close')} {repo}#{open_[0]['number']}: green again"
-        if open_:
-            return f"?  {repo}#{open_[0]['number']}: couldn't check this run, left open"
-        return None
+        until = f"`{f[1].split()[-1]}` is green" if f else ""
+        return sync_repo_issue(repo, f"ci-red:{repo}", f[1:] if f else None, complete, apply, until,
+                               "The default branch's CI is green again; closing.", label="ci-red")
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
         lines = [l for l in pool.map(one, repos) if l]
+    print("\n".join(lines) if lines else "none")
+
+
+def agents_finding(lines):
+    """(title, body) or None: AGENTS.md lines that still describe sbt-mcp after the sync's own rewrite of the factory bullet."""
+    if not lines:
+        return None
+    quoted = "\n".join(f"{n}: {l.strip()[:200]}" for n, l in lines)
+    return ("AGENTS.md still describes sbt-mcp",
+            "`AGENTS.md` still describes sbt-mcp, the MCP server that sbta replaced (a port or loopback HTTP endpoint, "
+            "an HTTP entry for Kiro, the `.claude/sbt-mcp-stdio.sh` bridge, `/tmp/sbt-mcp-*.log`). The MCP configs "
+            "already run `./sbta --mcp` (stdio), so agents that follow this text look for a server that isn't there. "
+            f"Lines that match:\n\n```\n{quoted}\n```\n\n"
+            "Rewrite the section around them with the sbta facts (zen-of-projects step 5, Align, and its \"sbta\" "
+            "section), keeping any project-specific advice. Make the change in the rolling PR with `Fixes #<n>` in its "
+            "description: it's an `AGENTS.md` update, which merges with the version bumps.")
+
+
+def sync_agents_issues(stale, apply):
+    """One issue in each sbt repo whose AGENTS.md still describes sbt-mcp (stale: repo -> leftover lines, for the repos
+    this run checked)."""
+    print("\n## AGENTS.md describing sbt-mcp (issues in the repos)")
+
+    def one(repo):
+        return sync_repo_issue(repo, f"agents-sbt-mcp:{repo}", agents_finding(stale[repo]), True, apply,
+                               "`AGENTS.md` no longer describes sbt-mcp",
+                               "`AGENTS.md` no longer describes sbt-mcp; closing.")
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+        lines = [l for l in pool.map(one, sorted(stale)) if l]
     print("\n".join(lines) if lines else "none")
 
 
@@ -840,6 +884,7 @@ def main():
     boot = bootstrap()
     pending_prs = []
     failures, sync_prs = {}, {}  # repo -> error; repo -> (open sync PR number, created_at)
+    agents_stale = {}  # sbt repo -> AGENTS.md lines that still describe sbt-mcp (repos this run checked)
     drifted = set()
     work = Path(tempfile.mkdtemp(prefix="factory-sync-"))
     # GitHub's git and API endpoints fail in bursts (2026-11-04: 16 repos got "Internal Server Error" on push within
@@ -866,6 +911,8 @@ def main():
                 sync_prs[repo] = (pr["number"], pr["created_at"])
             clone(repo, default, d)
             kind, changes = desired(repo, d, boot)
+            if kind == "sbt" and repo not in SBT_KEEP_LAUNCHER:
+                agents_stale[repo] = factory_sbta.agents_leftovers(d)
             label = ensure_label(repo, apply)
             if not changes:
                 print(f"=  {repo} ({kind}): in sync{'; ' + '; '.join(label) if label else ''}"
@@ -972,6 +1019,10 @@ def main():
             sync_ci_issues(repos, apply)
         except Exception as e:
             print(f"!! red CI issues: {e}")
+    try:
+        sync_agents_issues(agents_stale, apply)
+    except Exception as e:
+        print(f"!! AGENTS.md issues: {e}")
     digest_and_weekly(repos)
     run("rm", "-rf", str(work), check=False)
 
