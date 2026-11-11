@@ -157,7 +157,7 @@ The conventions are zen-of-projects "Node.js Projects". Set up this way: `jamesw
 
 ## Factory Setup: Websites (draft)
 
-The guidance is the "Website Projects" section of zen-of-projects. Static sites have no build, so their routine loads the Skill from https://start.jamesward.com instead of SkillsJars. They don't use MCP servers. Sites set up this way: `jamesward/ai4jvm` (daily) and `MindviewLLC/podcast` (happypathprogramming.com, weekly; its regeneration rules live in its `AGENTS.md` and `.scripts/`).
+The guidance is the "Website Projects" section of zen-of-projects. Static sites have no build, so their routine reads the Skill from a clone of `jamesward/skills` instead of SkillsJars (a fetch of https://start.jamesward.com gets HTTP 403 in cloud sessions). They don't use MCP servers. Sites set up this way: `jamesward/ai4jvm` (daily) and `MindviewLLC/podcast` (happypathprogramming.com, weekly, routine `podcast maintenance`; the local clone is `~/projects/happypathprogramming`; its regeneration rules live in its `AGENTS.md` and `.scripts/`). For Lighthouse, a site routine uses the image's Chromium (`/opt/pw-browsers/chromium`) and stops its local server with `kill "$SERVER"`, not `pkill`, which the classifier denies.
 
 1. **Infrastructure:** each site's hosting is defined in `~/projects/domains/domains.pkl` (repo `jamesward/domains`) as a `staticSite` entry with `githubRepo = "<owner>/<repo>"`. The `staticSite` pattern comes from `cfn-pkl-extras`. It creates the S3 bucket, CloudFront distribution and DNS, plus a CodeBuild project that runs on every push to the site repo's default branch:
    - it syncs the repo to S3 (`aws s3 sync --delete`, skipping the globs listed in `.slugignore`)
