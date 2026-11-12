@@ -157,7 +157,7 @@ The conventions are zen-of-projects "Node.js Projects". Set up this way: `jamesw
 
 ## Factory Setup: Websites (draft)
 
-The guidance is the "Website Projects" section of zen-of-projects. Static sites have no build, so their routine reads the Skill from a clone of `jamesward/skills` instead of SkillsJars (a fetch of https://start.jamesward.com gets HTTP 403 in cloud sessions). They don't use MCP servers. Sites set up this way: `jamesward/ai4jvm` (daily) and `MindviewLLC/podcast` (happypathprogramming.com, weekly, routine `podcast maintenance`; the local clone is `~/projects/happypathprogramming`; its regeneration rules live in its `AGENTS.md` and `.scripts/`). For Lighthouse, a site routine uses the image's Chromium (`/opt/pw-browsers/chromium`) and stops its local server with `kill "$SERVER"`, not `pkill`, which the classifier denies.
+The guidance is the `zen-of-websites` Skill, plus zen-of-projects for the rolling PR, merging and steps 8 and 9. Static sites have no build, so their routine reads both Skills from a clone of `jamesward/skills` main instead of SkillsJars (so a merged Skill change reaches the sites without a release) (a fetch of https://start.jamesward.com gets HTTP 403 in cloud sessions). They don't use MCP servers. Sites set up this way: `jamesward/ai4jvm` (daily) and `MindviewLLC/podcast` (happypathprogramming.com, weekly, routine `podcast maintenance`; the local clone is `~/projects/happypathprogramming`; its regeneration rules live in its `AGENTS.md` and `.scripts/`). For Lighthouse, a site routine uses the image's Chromium (`/opt/pw-browsers/chromium`) and stops its local server with `kill "$SERVER"`, not `pkill`, which the classifier denies.
 
 1. **Infrastructure:** each site's hosting is defined in `~/projects/domains/domains.pkl` (repo `jamesward/domains`) as a `staticSite` entry with `githubRepo = "<owner>/<repo>"`. The `staticSite` pattern comes from `cfn-pkl-extras`. It creates the S3 bucket, CloudFront distribution and DNS, plus a CodeBuild project that runs on every push to the site repo's default branch:
    - it syncs the repo to S3 (`aws s3 sync --delete`, skipping the globs listed in `.slugignore`)
@@ -166,7 +166,7 @@ The guidance is the "Website Projects" section of zen-of-projects. Static sites 
    So **a merge to the default branch is a production deploy**. To add or move a site, change `domains.pkl` and deploy that repo; the site repo needs nothing else.
 2. **`.slugignore`:** list every non-site file in it: `AGENTS.md`, `SPEC.md`, `.factory/*`, `.github/*`, `.claude/*` and so on. Since cfn-pkl-extras 0.2.6, every deploy also deletes bucket objects that match an ignored pattern. So adding a file to `.slugignore` removes it from the live site on the next push; it now returns 403.
 3. **Seed the repo:**
-   - a site-specific `.factory/MAINTENANCE.md` (use `ai4jvm/.factory/MAINTENANCE.md` as the template);
+   - a site-specific `.factory/MAINTENANCE.md` (use `ai4jvm/.factory/MAINTENANCE.md` as the template) that refers to `zen-of-websites` for what it covers, such as the Lighthouse recipe, and records only the site's own specifics;
    - a structural check script, plus a CI workflow that runs it on push and PR;
    - `AGENTS.md` covering the spec, the generated files, publishing, and exceptions.
 
