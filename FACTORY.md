@@ -279,6 +279,8 @@ It only reports by default. `--apply` creates or updates routines to match the t
 | `jamesward/zio-http-guard` | Tue | 06:37 | `trig_01RfJLrdtmNYHQbWwKbhErow` |
 | `jamesward/zio-http-mcp` | Wed | 06:37 | `trig_01QKdyXLkSSGPRuTKrQPwSkh` |
 | `jamesward/zio-decisions` | Thu | 06:37 | `trig_01R4euodXkJ9ngzqBKomuhy3` |
+| `jamesward/zio-acp` | Wed | 07:37 | `trig_01KRekNBzKW5Ks2NSA1Gt8La` |
+| `jamesward/zio-auth-server` | Fri | 06:47 | `trig_014emdrzR3Ze26QbnyPRhMto` |
 | `jamesward/javadoccentral` | Tue | 06:57 | `trig_015gFmnB5JMkaq6p3BGx7LwM` |
 | `jamesward/zio-mavencentral` | Wed | 06:57 | `trig_01R8SF1ciT7FGtmFsNi1gRJV` |
 | `jamesward/hello-spring-ai-bedrock` | Fri | 06:57 | `trig_01XQvq7iqTV3hXCod3eXWHij` |
@@ -677,6 +679,22 @@ Uses the Node SemVer Library to resolve version range things for WebJars
 Source: https://github.com/jamesward/semver-as-a-service
 Heroku App: semver-as-a-service (Node.js, no add-ons; GitHub auto-deploys `main`)
 URL: https://semver.webjars.org
+
+
+### zio-acp
+
+ZIO library for the Agent Client Protocol (ACP) v1, for building ACP agents and clients
+
+Source: https://github.com/jamesward/zio-acp
+Maven Central: com.jamesward:zio-acp_3
+
+
+### zio-auth-server
+
+ZIO HTTP OAuth 2.1 authorization server with email sign-in, for MCP servers and web apps
+
+Source: https://github.com/jamesward/zio-auth-server
+Maven Central: com.jamesward:zio-auth-server_3, com.jamesward:zio-auth-server-magnum_3
 
 
 ### zio-bedrock
