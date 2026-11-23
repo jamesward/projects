@@ -265,6 +265,7 @@ It only reports by default. `--apply` creates or updates routines to match the t
 | `jamesward/hello-zio-bedrock` | Wed | 06:07 | `trig_012ciycBPmMMB7mA1MHFWanu` |
 | `jamesward/hello-zio-http` | Thu | 06:07 | `trig_01SPY7Zw8aARTuQx29xwVyFZ` |
 | `jamesward/hello-zio-mcp` | Fri | 06:07 | `trig_01SeFGuH1odTGC5KyaWJ1oak` |
+| `jamesward/rss2mcp` | Fri | 06:17 | |
 | `jamesward/hello-zio-typesafe-ai` | Mon | 06:17 | `trig_01DSKfoetJzLVFYRkea9PGkK` |
 | `jamesward/jev-llm-c4` | Tue | 06:17 | `trig_01Kk7rN2xfEQZ8Z9RRkMSXzU` |
 | `jamesward/jevlm` | Wed | 06:17 | `trig_014mdtwSnD7rwhc2V4Y5776C` |
@@ -340,6 +341,7 @@ What each favorited Heroku app runs on (checked 2026-11-02 with `heroku apps:inf
 | `mytoolbook-mcp` | `EffectOrientedProgramming/toolbook` | web Basic ×1 | logtail:free | mcp.mytoolbook.ai, mcp.effectorientedprogramming.com, mcp.bootifulspringai.com |
 | `mytoolbook-proxy` | `EffectOrientedProgramming/toolbook` | web Eco ×1 | none | proxy.mytoolbook.ai |
 | `mytoolbook-www` | `EffectOrientedProgramming/toolbook` | web Basic ×1 | logtail:free | www.mytoolbook.ai |
+| `rss2mcp` | `jamesward/rss2mcp` | web Basic ×1 | none | rss2mcp.jamesward.dev |
 | `semver-as-a-service` | `jamesward/semver-as-a-service` | web Eco ×1 | none | semver.webjars.org |
 | `skillsjars` | `skillsjars/skillsjars` | web Basic ×1 | heroku-inference:standard | www.skillsjars.com |
 | `teamchimbo` | unknown | web Eco ×1 (stack `cedar-14`) | none | www.teamchimbo.com |
@@ -564,6 +566,14 @@ Heroku Apps:
 ### Pkl GitHub Actions
 
 Source: https://github.com/jamesward/pklgha
+
+
+### rss2mcp
+
+MCP server that serves new RSS and Atom feed items as MCP Events (`feed.item.published`, webhook, push and poll delivery), on zio-http-mcp. Live at https://rss2mcp.jamesward.dev/ (ChatGPT: set up watches in Dot). One dyno, by design: webhook subscriptions are in memory, so a second dyno would deliver twice.
+
+Source: https://github.com/jamesward/rss2mcp
+Heroku App: rss2mcp
 
 
 ### sbta
