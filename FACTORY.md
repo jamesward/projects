@@ -265,7 +265,7 @@ It only reports by default. `--apply` creates or updates routines to match the t
 | `jamesward/hello-zio-bedrock` | Wed | 06:07 | `trig_012ciycBPmMMB7mA1MHFWanu` |
 | `jamesward/hello-zio-http` | Thu | 06:07 | `trig_01SPY7Zw8aARTuQx29xwVyFZ` |
 | `jamesward/hello-zio-mcp` | Fri | 06:07 | `trig_01SeFGuH1odTGC5KyaWJ1oak` |
-| `jamesward/rss2mcp` | Fri | 06:17 | |
+| `jamesward/rss2mcp` | Fri | 06:17 | `trig_01BWxj34qxE228LxPwW9MTjp` |
 | `jamesward/hello-zio-typesafe-ai` | Mon | 06:17 | `trig_01DSKfoetJzLVFYRkea9PGkK` |
 | `jamesward/jev-llm-c4` | Tue | 06:17 | `trig_01Kk7rN2xfEQZ8Z9RRkMSXzU` |
 | `jamesward/jevlm` | Wed | 06:17 | `trig_014mdtwSnD7rwhc2V4Y5776C` |
