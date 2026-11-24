@@ -77,6 +77,7 @@ One reusable environment for all managed repos (claude.ai/code → environment s
   Every command in it is on a single line, with no indentation or backslash continuations. A pasted continuation once merged lines and corrupted `~/.sbt/repositories` (`duplicate label 'local'`). The script fails if that file doesn't come out as exactly 4 lines. Edit the file, not the environment, then re-paste it.
 
   The script must exit 0 and finish in about 5 minutes to be cached; this block took about 25 seconds locally. Its output is cached for about 7 days, and the cache is rebuilt when the script or the allowed hosts change. To check a session, look for the `--- /root/.sbt/repositories:` listing and the `ls` of `~/.sbt/boot` in the setup output, or run `cat ~/.sbt/repositories ~/.config/sbt/sbtopts`. A launcher error that lists `repo.scala-sbt.org` and `repo.typesafe.com` means the file isn't in effect.
+- **Python:** the setup script doesn't install one. Routines use the base image's `python3` (`/usr/local/bin/python3`, 3.11.18; the image also has `python3.13`), so zen-of-projects ("Python tools and scripts") has routine-run Python code target 3.11. If the image's `python3` moves to a newer version, update that rule.
 - **Environment variables:**
 
   ```text
