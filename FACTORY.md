@@ -310,6 +310,7 @@ It only reports by default. `--apply` creates or updates routines to match the t
 | `jamesward/buildpack-scala` | Mon | 07:37 | `trig_012EvnVwqqisTDC6UPE8P6pr` |
 | `jamesward/buildpack-scala-native` | Tue | 07:37 | `trig_01Bwh85yjf4gHGvySvvdXGQG` |
 | `jamesward/sbta` | Thu | 07:37 | `trig_01RfwYDrrxUNq3TxCCrXwnDq` |
+| `jamesward/mcp` | Thu | 07:47 | |
 | `jamesward/heroku-ops` | Fri | 07:37 | `trig_01FXYyJZ3coszdLK5mYH7EEt` |
 
 ## Registries & Production Identifiers
@@ -338,6 +339,7 @@ What each favorited Heroku app runs on (checked 2026-11-02 with `heroku apps:inf
 | `jw-heroku-ops` | `jamesward/heroku-ops` | web Standard-1X ×1 | none | none |
 | `login-jamesward-dev` | `jamesward/login-jamesward-dev` | web Eco ×1 | none | login.jamesward.dev |
 | `mcp-apps-demo` | `jamesward/mcp-apps-demo` | web Eco ×1 | none | mcp-demo.jamesward.com |
+| `mcp-jamesward` | `jamesward/mcp` | web Eco ×1 | none | mcp.jamesward.com, skills.jamesward.com |
 | `mcp-sample` | `jamesward/hello-spring-mcp-server` | web Eco ×1 | none | mcp-test.jamesward.com |
 | `mytoolbook-api` | `EffectOrientedProgramming/toolbook` | web Basic ×1 | heroku-postgresql:essential-0, logtail:free, mailgun:starter | api.mytoolbook.ai |
 | `mytoolbook-login` | `EffectOrientedProgramming/toolbook` | web Basic ×1 | logtail:free | login.mytoolbook.ai |
@@ -452,7 +454,7 @@ Source: https://github.com/jamesward/hello-zio-http
 
 ### Heroku Buildpack Scala
 
-Used by every factory Scala server on Heroku. Adds `-XX:+ExitOnOutOfMemoryError` to `JAVA_TOOL_OPTIONS` at dyno start. Managed weekly (zen-of-projects "Heroku Buildpack Projects": `bin/` changes need a human, because every app builds with `main`).
+Used by every factory Scala server on Heroku. Adds `-XX:+ExitOnOutOfMemoryError` to `JAVA_TOOL_OPTIONS` at dyno start. Its native image mode (apps using sbt-native-image) builds mcp-jamesward. Managed weekly (zen-of-projects "Heroku Buildpack Projects": `bin/` changes need a human, because every app builds with `main`).
 
 Source: https://github.com/jamesward/buildpack-scala
 
@@ -551,6 +553,14 @@ Heroku App: mcp-apps-demo
 
 Source: https://github.com/jamesward/hello-spring-mcp-server
 Heroku App: mcp-sample
+
+
+### mcp.jamesward.com
+
+James Ward's MCP server: serves the Skills from `jamesward/skills` `main` (read at startup). A Scala/ZIO server on Heroku, deployed as a GraalVM native binary through buildpack-scala's native image mode.
+
+Source: https://github.com/jamesward/mcp
+Heroku App: mcp-jamesward
 
 
 ### mytoolbook.ai
