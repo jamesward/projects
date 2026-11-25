@@ -324,6 +324,7 @@ The apps heroku-ops watches. This table is the source of truth: [`factory-heroku
 | json-paste | jamesward/json-paste | https://json-paste.herokuapp.com | / |
 | jw-heroku-ops | jamesward/heroku-ops | https://jw-heroku-ops-bd1ee276f8be.herokuapp.com | /health |
 | javadocs | jamesward/javadoccentral | https://www.javadocs.dev | / |
+| mcp-jamesward | jamesward/mcp | https://mcp.jamesward.com | /health |
 | rss2mcp | jamesward/rss2mcp | https://rss2mcp.jamesward.dev | /health |
 
 ### Production infrastructure (Heroku)
