@@ -310,7 +310,7 @@ It only reports by default. `--apply` creates or updates routines to match the t
 | `jamesward/buildpack-scala` | Mon | 07:37 | `trig_012EvnVwqqisTDC6UPE8P6pr` |
 | `jamesward/buildpack-scala-native` | Tue | 07:37 | `trig_01Bwh85yjf4gHGvySvvdXGQG` |
 | `jamesward/sbta` | Thu | 07:37 | `trig_01RfwYDrrxUNq3TxCCrXwnDq` |
-| `jamesward/mcp` | Thu | 07:47 | |
+| `jamesward/mcp` | Thu | 07:47 | `trig_014NDWM2SLFRkJVoK5eez8xD` |
 | `jamesward/heroku-ops` | Fri | 07:37 | `trig_01FXYyJZ3coszdLK5mYH7EEt` |
 
 ## Registries & Production Identifiers
