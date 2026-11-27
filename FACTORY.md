@@ -7,7 +7,7 @@ Why the factory is built this way, and the principles every change to it follows
 2. Shared registries and production identifiers.
 3. The project list.
 
-**All guidance and conventions live in the zen-of-projects Skill** (`com.jamesward:skills`, source `~/projects/jamesward-skills`, published at https://start.jamesward.com). Project-specific facts and exceptions live in each project's `AGENTS.md`. Don't add guidelines here; add them to the Skill. [AGENTS.md](AGENTS.md) lists where everything else goes.
+**All guidance and conventions live in the zen-of-projects Skill** (`com.jamesward:skills`, source `~/projects/skills-jamesward`, published at https://start.jamesward.com). Project-specific facts and exceptions live in each project's `AGENTS.md`. Don't add guidelines here; add them to the Skill. [AGENTS.md](AGENTS.md) lists where everything else goes.
 
 ## Branches
 
@@ -140,7 +140,7 @@ Verified end to end after the browser App step. In each case the run pushed, ope
 - webjars-locator-lite (Maven, routine `trig_01Q2pMzUC7gDg1RG8NEzDVd2`): PR #26.
 - hello-spring-ai-bedrock (Gradle/Kotlin, routine `trig_01XQvq7iqTV3hXCod3eXWHij`): PR #10, which enabled `allWarningsAsErrors`.
 
-**Testing an unreleased Skill:** copy `~/projects/jamesward-skills/skills/zen-of-projects/SKILL.md` to `.factory/skills/zen-of-projects/SKILL.md` in the repo under test. `MAINTENANCE.md` step 3 reads that copy instead of the extracted one. Delete it once the Skill is released and the repo's `com.jamesward:skills` pin includes the change. The daily factory sync also removes a copy whose exact content `jamesward/skills` main has had (it's then a stale copy that holds the routine back from newer versions; 2026-11-04 found six, all from 2026-10-30), so a forgotten copy lasts at most until the change merges.
+**Testing an unreleased Skill:** copy `~/projects/skills-jamesward/skills/zen-of-projects/SKILL.md` to `.factory/skills/zen-of-projects/SKILL.md` in the repo under test. `MAINTENANCE.md` step 3 reads that copy instead of the extracted one. Delete it once the Skill is released and the repo's `com.jamesward:skills` pin includes the change. The daily factory sync also removes a copy whose exact content `jamesward/skills` main has had (it's then a stale copy that holds the routine back from newer versions; 2026-11-04 found six, all from 2026-10-30), so a forgotten copy lasts at most until the change merges.
 
 **Repos without the Skills dependency:** the SkillsJars plugins themselves and their examples (`skillsjars-gradle-plugin`, `skillsjars-maven-plugin`, `skillsjars-example-spring-ai`) don't depend on `com.jamesward:skills`: in a plugin's own build or a published example it would muddy what the project demonstrates. Their `.factory/MAINTENANCE.md` replaces bootstrap steps 1–3 with a shallow clone of jamesward/skills into `/tmp/jamesward-skills` (pre-approved in `.claude/settings.json`), and `AGENTS.md` records the exception. A `curl` of https://start.jamesward.com got HTTP 403 from the cloud proxy (its redirect to the raw file is refused), so all three routines stopped at step 1 (2026-10-06/07).
 

@@ -12,7 +12,7 @@ Say each thing once, in the one place it belongs, and link to it from anywhere e
 | Principles, and why the factory is built the way it is (decisions, trade-offs) | [DESIGN.md](DESIGN.md). When a principle changes, change it there first. |
 | How to set up and run the factory: setup steps, commands, and the operational facts an agent needs to avoid a known mistake | [FACTORY.md](FACTORY.md) |
 | The project list, schedules, registries and production identifiers | [FACTORY.md](FACTORY.md) |
-| Conventions for every project, and the maintenance routine itself | the zen-of-projects Skill, in `jamesward/skills` (`skills/zen-of-projects/SKILL.md`, locally `~/projects/jamesward-skills`), never here. It reaches the routines only through a release. |
+| Conventions for every project, and the maintenance routine itself | the zen-of-projects Skill, in `jamesward/skills` (`skills/zen-of-projects/SKILL.md`, locally `~/projects/skills-jamesward`), never here. It reaches the routines only through a release. |
 | Facts about one project and its exceptions to the Skill, each with its reason | that project's `AGENTS.md` |
 | Open work, plans and open questions | [TODO.md](TODO.md). Remove an item once it's done or no longer needed; don't keep a done log. |
 | How to use a script | the script's docstring; FACTORY.md links to the script and says when to run it |
