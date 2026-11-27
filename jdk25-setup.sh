@@ -41,6 +41,13 @@ mkdir -p "$HOME/.m2"
 printf '%s\n' '<settings>' '  <!-- Cloud environment only: prefer the Google Maven Central mirror; Maven Central stays the fallback. -->' '  <profiles>' '    <profile>' '      <id>google-maven-central</id>' '      <repositories>' '        <repository><id>google-maven-central</id><url>https://maven-central.storage-download.googleapis.com/maven2/</url><snapshots><enabled>false</enabled></snapshots></repository>' '      </repositories>' '      <pluginRepositories>' '        <pluginRepository><id>google-maven-central</id><url>https://maven-central.storage-download.googleapis.com/maven2/</url><snapshots><enabled>false</enabled></snapshots></pluginRepository>' '      </pluginRepositories>' '    </profile>' '  </profiles>' '  <activeProfiles><activeProfile>google-maven-central</activeProfile></activeProfiles>' '</settings>' > "$HOME/.m2/settings.xml"
 grep -q google-maven-central "$HOME/.m2/settings.xml" || { echo "ERROR: Maven settings"; exit 1; }
 
+# --- sbt-native-image (jamesward/mcp): its bundled Coursier launcher downloads its own jars from repo1.maven.org, ignoring the resolver setup, and got HTTP 429 (projects#74). Put them in Coursier's cache from the mirror, at the repo1 paths the launcher looks up. 2.0.3 is the launcher sbt-native-image 0.7.0 bundles ---
+CS_LAUNCHER_VERSION=2.0.3
+CS_CACHE="${COURSIER_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/coursier/v1}/https/repo1.maven.org/maven2"
+CS_URLS="$(curl -fsSL "https://github.com/coursier/coursier/releases/download/v$CS_LAUNCHER_VERSION/coursier" | python3 -c 'import io, sys, zipfile; sys.stdout.write(zipfile.ZipFile(io.BytesIO(sys.stdin.buffer.read())).read("coursier/bootstrap/launcher/bootstrap-jar-urls").decode())')" || CS_URLS=""
+CS_OK=0; CS_FAILED=0; for u in $CS_URLS; do case "$u" in https://repo1.maven.org/maven2/*) p="${u#https://repo1.maven.org/maven2/}"; if [ -s "$CS_CACHE/$p" ] || { mkdir -p "$(dirname "$CS_CACHE/$p")" && curl -fsSL -o "$CS_CACHE/$p.part" "https://maven-central.storage-download.googleapis.com/maven2/$p" && mv "$CS_CACHE/$p.part" "$CS_CACHE/$p"; }; then CS_OK=$((CS_OK + 1)); else rm -f "$CS_CACHE/$p.part"; CS_FAILED=$((CS_FAILED + 1)); fi ;; esac; done
+echo "Coursier $CS_LAUNCHER_VERSION launcher jars in $CS_CACHE: $CS_OK cached, $CS_FAILED failed (non-fatal)"
+
 # --- Pre-download sbt itself so sessions don't fetch it (cached with the environment) ---
 SBT_VERSION=2.0.10
 WARM="$(mktemp -d)"
